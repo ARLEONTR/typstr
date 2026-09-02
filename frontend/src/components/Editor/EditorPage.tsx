@@ -2354,22 +2354,17 @@ function ProjectWorkspace({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeSource, canRender, canRenderLatex, compileContextWithActiveSource, compileNow, compileTargetSource, previewMode, shouldUseTinymistWebPreview])
 
-  const initialCompileFiredRef = useRef<string | null>(null)
+  const initialCompileFiredFileRef = useRef<string | null>(null)
   useEffect(() => {
     if (!canRender) return
     if (canRenderLatex) return
     if (canCollaborateInEditor && !synced) return
-    if (initialCompileFiredRef.current === project.id) return
-    // Read ytext directly — memo is stale when Hocuspocus fills content without changing the ytext reference
-    const source = (compileTargetFile.id === activeFile.id ? ytext.toString() : '') || projectSearchIndex[compileTargetFile.id] || ''
+    if (initialCompileFiredFileRef.current === compileTargetFile.id) return
+    const source = (compileTargetFile.id === activeFile.id ? (activeEditorSource || ytext.toString()) : '') || projectSearchIndex[compileTargetFile.id] || ''
     if (!source.trim()) return
-    initialCompileFiredRef.current = project.id
-    if (shouldUseTinymistWebPreview) {
-      setTinymistSyncSource(source)
-      return
-    }
+    initialCompileFiredFileRef.current = compileTargetFile.id
     compileNow(source, compileContextWithActiveSource(source))
-  }, [activeFile.id, canCollaborateInEditor, canRender, canRenderLatex, compileContextWithActiveSource, compileNow, compileTargetFile.id, project.id, projectSearchIndex, shouldUseTinymistWebPreview, synced, ytext])
+  }, [activeEditorSource, activeFile.id, canCollaborateInEditor, canRender, canRenderLatex, compileContextWithActiveSource, compileNow, compileTargetFile.id, projectSearchIndex, synced, ytext])
 
   const latexInitialSourceRef = useRef<string | null>(null)
   const latexInitialSourceFileIdRef = useRef<string | null>(null)
@@ -6896,11 +6891,7 @@ function ProjectWorkspace({
                         onContextMenu={handleTinymistContextMenu}
                         cursorPosition={tinymistCursorPosition}
                       />
-                    ) : shouldUseTinymistWebPreview ? (
-                      <div className={styles.placeholder}>
-                        <span>{typstPreviewSession?.detail || 'Tinymist preview is initializing…'}</span>
-                      </div>
-                    ) : pages.length > 0 || visibleCompileError || isCompiling ? (
+                    ) : (
                       <Suspense fallback={<PanelLoadingMessage message="Loading SVG preview…" compact />}>
                         <SvgPreview
                           key={`svg:${activeFile.id}:${pageOffset}:${pageCount}`}
@@ -6912,10 +6903,6 @@ function ProjectWorkspace({
                           onTextClick={handleSvgTextClick}
                         />
                       </Suspense>
-                    ) : (
-                      <div className={styles.placeholder}>
-                        <span>{typstPreviewSession?.detail || 'Tinymist preview is initializing…'}</span>
-                      </div>
                     )}
                   </div>
                   <div

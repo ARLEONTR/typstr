@@ -51,6 +51,10 @@ export default defineConfig({
   },
   server: {
     port: 8989,
+    watch: {
+      usePolling: true,
+      interval: 300,
+    },
     proxy: {
       '/api': {
         target: devProxyTarget,
