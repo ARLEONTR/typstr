@@ -1,0 +1,54 @@
+# Typstr OpenLDAP Bootstrap Data
+
+dn: ou=users,dc=example,dc=org
+objectClass: organizationalUnit
+ou: users
+
+dn: ou=groups,dc=example,dc=org
+objectClass: organizationalUnit
+ou: groups
+
+# User: Alice Smith (Username: alice, Password: password123)
+dn: uid=alice,ou=users,dc=example,dc=org
+objectClass: inetOrgPerson
+objectClass: posixAccount
+objectClass: shadowAccount
+cn: Alice Smith
+sn: Smith
+givenName: Alice
+mail: alice@example.com
+uid: alice
+uidNumber: 10001
+gidNumber: 10001
+homeDirectory: /home/alice
+userPassword: password123
+
+# User: Bob Jones (Username: bob, Password: password123)
+dn: uid=bob,ou=users,dc=example,dc=org
+objectClass: inetOrgPerson
+objectClass: posixAccount
+objectClass: shadowAccount
+cn: Bob Jones
+sn: Jones
+givenName: Bob
+mail: bob@example.com
+uid: bob
+uidNumber: 10002
+gidNumber: 10002
+homeDirectory: /home/bob
+userPassword: password123
+
+# User: John Doe / Admin (Username: john.doe, Password: admin123)
+dn: uid=john.doe,ou=users,dc=example,dc=org
+objectClass: inetOrgPerson
+objectClass: posixAccount
+objectClass: shadowAccount
+cn: John Doe
+sn: Doe
+givenName: John
+mail: admin@example.com
+uid: john.doe
+uidNumber: 10003
+gidNumber: 10003
+homeDirectory: /home/john.doe
+userPassword: admin123

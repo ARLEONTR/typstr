@@ -1,0 +1,103 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: "${POSTGRES_DB:-typstr}"
+      POSTGRES_USER: "${POSTGRES_USER:-typstr}"
+      POSTGRES_PASSWORD: "${POSTGRES_PASSWORD:-typstr}"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-typstr} -d ${POSTGRES_DB:-typstr}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    volumes:
+      - redis-data:/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+      args:
+        BACKEND_BASE_IMAGE: "${BACKEND_BASE_IMAGE:-typstr-backend-texbase:latest}"
+    shm_size: "${BACKEND_SHM_SIZE:-4gb}"
+    environment:
+      PORT: "3000"
+      LOG_LEVEL: "${LOG_LEVEL:-ERROR}"
+      DATABASE_URL: "${DATABASE_URL:-postgresql://typstr:typstr@postgres:5432/typstr}"
+      SESSION_REDIS_URL: "${SESSION_REDIS_URL:-redis://redis:6379/0}"
+      FRONTEND_ORIGIN: "${FRONTEND_ORIGIN:-http://localhost}"
+      NODE_ENV: production
+      MAX_CONCURRENT_COMPILES: "${MAX_CONCURRENT_COMPILES:-4}"
+      SESSION_SECRET: "${SESSION_SECRET}"
+      COLLABORATION_SECRET: "${COLLABORATION_SECRET}"
+      COOKIE_SECURE: "${COOKIE_SECURE:-false}"
+      TRUST_PROXY_HOPS: "${TRUST_PROXY_HOPS:-0}"
+      SESSION_COOKIE_DOMAIN: "${SESSION_COOKIE_DOMAIN:-}"
+      GOOGLE_CLIENT_ID: "${GOOGLE_CLIENT_ID}"
+      GOOGLE_CLIENT_SECRET: "${GOOGLE_CLIENT_SECRET}"
+      GOOGLE_CALLBACK_URL: "${GOOGLE_CALLBACK_URL:-http://localhost/api/auth/google/callback}"
+      GOOGLE_DRIVE_ROOT_NAME: "${GOOGLE_DRIVE_ROOT_NAME:-typstr}"
+      ORCID_CLIENT_ID: "${ORCID_CLIENT_ID:-}"
+      ORCID_CLIENT_SECRET: "${ORCID_CLIENT_SECRET:-}"
+      ORCID_CALLBACK_URL: "${ORCID_CALLBACK_URL:-http://localhost/api/auth/orcid/callback}"
+      ORCID_AUTHORIZE_URL: "${ORCID_AUTHORIZE_URL:-https://orcid.org/oauth/authorize}"
+      ORCID_TOKEN_URL: "${ORCID_TOKEN_URL:-https://orcid.org/oauth/token}"
+      GEMINI_API_KEY: "${GEMINI_API_KEY}"
+      SMTP_HOST: "${SMTP_HOST:-}"
+      SMTP_PORT: "${SMTP_PORT:-587}"
+      SMTP_USER: "${SMTP_USER:-}"
+      SMTP_PASSWORD: "${SMTP_PASSWORD:-}"
+      SMTP_FROM: "${SMTP_FROM:-Typstr <typstr@arleon.com.tr>}"
+      REQUEST_BODY_LIMIT_MB: "${REQUEST_BODY_LIMIT_MB:-64}"
+      TINYMIST_BIN: "${TINYMIST_BIN:-/usr/local/bin/tinymist}"
+      TEXLAB_BIN: "${TEXLAB_BIN:-/usr/local/bin/texlab}"
+      ADMIN_EMAILS: "${ADMIN_EMAILS:-}"
+      LOCAL_STORAGE_ROOT: "${LOCAL_STORAGE_ROOT:-/app/.local-storage}"
+      LOCAL_FILE_STORAGE: "${LOCAL_FILE_STORAGE:-false}"
+      LDAP_ENABLED: "${LDAP_ENABLED:-false}"
+      LDAP_URL: "${LDAP_URL:-}"
+      LDAP_BIND_DN: "${LDAP_BIND_DN:-}"
+      LDAP_BIND_PASSWORD: "${LDAP_BIND_PASSWORD:-}"
+      LDAP_SEARCH_BASE: "${LDAP_SEARCH_BASE:-}"
+      LDAP_SEARCH_FILTER: "${LDAP_SEARCH_FILTER:-}"
+      LDAP_EMAIL_ATTRIBUTE: "${LDAP_EMAIL_ATTRIBUTE:-mail}"
+      LDAP_NAME_ATTRIBUTE: "${LDAP_NAME_ATTRIBUTE:-cn}"
+      LDAP_TLS_REJECT_UNAUTHORIZED: "${LDAP_TLS_REJECT_UNAUTHORIZED:-true}"
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "node -e \"fetch('http://localhost:3000/api/health').then(r=>r.ok?process.exit(0):process.exit(1)).catch(()=>process.exit(1))\""]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  nginx:
+    build:
+      context: .
+      dockerfile: nginx/Dockerfile
+    ports:
+      - "${NGINX_HTTP_PORT:-80}:80"
+    depends_on:
+      backend:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  postgres-data:
+  redis-data:

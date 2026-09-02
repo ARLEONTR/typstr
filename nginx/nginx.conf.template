@@ -1,0 +1,162 @@
+worker_processes auto;
+error_log /var/log/nginx/error.log warn;
+
+events {
+  worker_connections 8192;
+  multi_accept on;
+}
+
+http {
+  include       /etc/nginx/mime.types;
+  default_type  application/octet-stream;
+
+  # Ensure .mjs files are served with the correct mime type for ES modules
+  types {
+    application/javascript mjs;
+  }
+
+  map $http_x_forwarded_proto $proxy_x_forwarded_proto {
+    default $http_x_forwarded_proto;
+    ''      $scheme;
+  }
+
+  map $http_x_forwarded_host $proxy_x_forwarded_host {
+    default $http_x_forwarded_host;
+    ''      $host;
+  }
+
+  map $http_upgrade $connection_upgrade {
+    default upgrade;
+    ''      close;
+  }
+
+  map $http_cookie $typstr_session_cookie {
+    default "";
+    "~*(?:^|;\s*)typstr-session=([^;]+)" $1;
+  }
+
+  map $typstr_session_cookie $backend_affinity_key {
+    default "$typstr_session_cookie";
+    "" "$remote_addr|$http_user_agent";
+  }
+
+  gzip on;
+  gzip_types text/plain text/css application/javascript application/json application/wasm;
+  gzip_min_length 1024;
+
+  sendfile on;
+  keepalive_timeout 65;
+
+  # Sticky sessions by session cookie.
+  # tinymist preview processes are spawned on a specific container so every
+  # request for a preview session must reach the same backend instance.
+  # The entrypoint script resolves all backend replica IPs from Docker DNS at
+  # startup and injects them below as individual server lines.
+  upstream backend_pool {
+    hash $backend_affinity_key consistent;
+%%BACKEND_SERVERS%%
+    keepalive 64;
+  }
+
+  server {
+    listen 80;
+    server_name _;
+    server_tokens off;
+
+    # Security headers
+    add_header X-Content-Type-Options "nosniff" always;
+    add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+    add_header X-XSS-Protection "1; mode=block" always;
+
+    root /usr/share/nginx/html;
+    index index.html;
+
+    # Never cache the SPA entry document; deploys swap hashed JS filenames.
+    location = /index.html {
+      add_header Cache-Control "no-cache, no-store, must-revalidate" always;
+      try_files $uri =404;
+    }
+
+    # Hash-named build assets can be cached aggressively, but missing assets must
+    # fail with 404 instead of falling back to index.html.
+    location /assets/ {
+      add_header Cache-Control "public, max-age=31536000, immutable" always;
+      try_files $uri =404;
+    }
+
+    # BusyTeX WASM + TeX Live data packages are large, versioned, and never mutate
+    # in place — cache them for a year so the browser only downloads them once.
+    location /core/busytex/ {
+      gzip off;
+      add_header Cache-Control "public, max-age=31536000, immutable" always;
+      try_files $uri =404;
+    }
+
+    # Serve frontend static files
+    location / {
+      add_header Cache-Control "no-cache, no-store, must-revalidate" always;
+      try_files $uri $uri/ /index.html;
+    }
+
+    # Proxy tinymist preview (HTTP + WebSocket) to backend.
+    # Covers both signed-in project previews and public supervisor review previews.
+    # Must be before the general /api/ block so nginx picks the more specific match.
+    location ~ ^/api/(projects/[^/]+|review/[^/]+)/tinymist-preview/ {
+      proxy_pass         http://backend_pool;
+      proxy_http_version 1.1;
+      proxy_set_header   Upgrade $http_upgrade;
+      proxy_set_header   Connection $connection_upgrade;
+      proxy_set_header   Host $host;
+      proxy_set_header   X-Forwarded-Proto $proxy_x_forwarded_proto;
+      proxy_set_header   X-Forwarded-Host $proxy_x_forwarded_host;
+      proxy_read_timeout 86400s;
+      proxy_send_timeout 86400s;
+      proxy_connect_timeout 60s;
+    }
+
+    # Supervisor review LaTeX previews can take longer than normal API calls,
+    # especially on a cold TeX cache. Keep the request alive while the backend
+    # compiles and returns the PDF payload.
+    location ~ ^/api/review/[^/]+/latex-preview$ {
+      proxy_pass         http://backend_pool;
+      proxy_http_version 1.1;
+      proxy_set_header   Connection "";
+      proxy_set_header   Host $host;
+      proxy_set_header   X-Real-IP $remote_addr;
+      proxy_set_header   X-Forwarded-For $proxy_add_x_forwarded_for;
+      proxy_set_header   X-Forwarded-Proto $proxy_x_forwarded_proto;
+      proxy_set_header   X-Forwarded-Host $proxy_x_forwarded_host;
+      client_max_body_size 64m;
+      proxy_connect_timeout 60s;
+      proxy_send_timeout 180s;
+      proxy_read_timeout 180s;
+    }
+
+    # Proxy REST API to backend
+    location /api/ {
+      proxy_pass         http://backend_pool;
+      proxy_http_version 1.1;
+      proxy_set_header   Connection "";
+      proxy_set_header   Host $host;
+      proxy_set_header   X-Real-IP $remote_addr;
+      proxy_set_header   X-Forwarded-For $proxy_add_x_forwarded_for;
+      proxy_set_header   X-Forwarded-Proto $proxy_x_forwarded_proto;
+      proxy_set_header   X-Forwarded-Host $proxy_x_forwarded_host;
+      # Allow large compile/export request bodies.
+      client_max_body_size 64m;
+      proxy_read_timeout 120s;
+    }
+
+    # Proxy WebSocket connections to backend
+    location /ws {
+      proxy_pass         http://backend_pool;
+      proxy_http_version 1.1;
+      proxy_set_header   Upgrade $http_upgrade;
+      proxy_set_header   Connection $connection_upgrade;
+      proxy_set_header   Host $host;
+      proxy_set_header   X-Forwarded-Proto $proxy_x_forwarded_proto;
+      proxy_set_header   X-Forwarded-Host $proxy_x_forwarded_host;
+      proxy_read_timeout 86400s;
+    }
+  }
+}

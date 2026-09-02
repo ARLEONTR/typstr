@@ -1,0 +1,59 @@
+services:
+  postgres:
+    volumes:
+      - ${PROD_DATA_DIR:-/prod-data}/postgres:/var/lib/postgresql/data
+
+  redis:
+    volumes:
+      - ${PROD_DATA_DIR:-/prod-data}/redis:/data
+
+  backend:
+    shm_size: "${BACKEND_SHM_SIZE:-4gb}"
+    environment:
+      NODE_OPTIONS: "--expose-gc --max-old-space-size=1024 --max-semi-space-size=64"
+      DATABASE_URL: "${PROD_DATABASE_URL:-postgresql://typstr:typstr@postgres:5432/typstr}"
+      SESSION_REDIS_URL: "${PROD_SESSION_REDIS_URL:-redis://redis:6379/0}"
+      FRONTEND_ORIGIN: "${PROD_FRONTEND_ORIGIN:-https://typs.tr}"
+      BACKEND_ORIGIN: "${PROD_BACKEND_ORIGIN:-https://typs.tr}"
+      COOKIE_SECURE: "${PROD_COOKIE_SECURE:-true}"
+      TRUST_PROXY_HOPS: "${PROD_TRUST_PROXY_HOPS:-1}"
+      SESSION_COOKIE_DOMAIN: "${PROD_SESSION_COOKIE_DOMAIN:-typs.tr}"
+      GOOGLE_CALLBACK_URL: "${PROD_GOOGLE_CALLBACK_URL:-https://typs.tr/api/auth/google/callback}"
+      ORCID_CALLBACK_URL: "${PROD_ORCID_CALLBACK_URL:-https://typs.tr/api/auth/orcid/callback}"
+      PROD_DATA_DIR: "${PROD_DATA_DIR:-/prod-data}"
+      XDG_CACHE_HOME: "${PROD_DATA_DIR:-/prod-data}/.local-storage/typst-cache"
+      LOCAL_STORAGE_ROOT: "${PROD_DATA_DIR:-/prod-data}/.local-storage"
+      BACKUP_DIR: "${PROD_DATA_DIR:-/prod-data}/backups"
+      COMPILE_TMPDIR: "${PROD_DATA_DIR:-/prod-data}/.local-storage/tmp"
+      COMPILE_WORKER_CONCURRENCY: "${COMPILE_WORKER_CONCURRENCY:-4}"
+      COMPILE_COALESCE_WINDOW_MS: "${COMPILE_COALESCE_WINDOW_MS:-160}"
+      COMPILE_HTTP_CONCURRENCY_MAX: "${COMPILE_HTTP_CONCURRENCY_MAX:-96}"
+      EXPORT_HTTP_CONCURRENCY_MAX: "${EXPORT_HTTP_CONCURRENCY_MAX:-48}"
+    volumes:
+      - ${PROD_DATA_DIR:-/prod-data}/.local-storage/typst-cache:${PROD_DATA_DIR:-/prod-data}/.local-storage/typst-cache
+      - ${PROD_DATA_DIR:-/prod-data}/.local-storage:${PROD_DATA_DIR:-/prod-data}/.local-storage
+      - ${PROD_DATA_DIR:-/prod-data}/backups:${PROD_DATA_DIR:-/prod-data}/backups
+
+  nginx:
+    ports: !reset []
+    expose:
+      - "80"
+
+  caddy:
+    image: caddy:2.8-alpine
+    depends_on:
+      nginx:
+        condition: service_started
+    ports:
+      - "80:80"
+      - "443:443"
+    dns:
+      - "1.1.1.1"
+      - "8.8.8.8"
+    environment:
+      DOMAIN_NAME: "${DOMAIN_NAME:-typs.tr}"
+    volumes:
+      - ./caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - ${PROD_DATA_DIR:-/prod-data}/caddy/data:/data
+      - ${PROD_DATA_DIR:-/prod-data}/caddy/config:/config
+    restart: unless-stopped

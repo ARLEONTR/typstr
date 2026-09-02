@@ -1,0 +1,340 @@
+.container {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  background: var(--editor-bg);
+  position: relative;
+}
+
+.previewToolbar {
+  position: sticky;
+  top: 0;
+  z-index: 18;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding: 10px 12px;
+  background: var(--card-bg);
+  border-bottom: 1px solid var(--panel-border);
+}
+
+.toolbarGroup {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.toolbarBtn,
+.toolbarBtnActive {
+  border: 1px solid var(--panel-border);
+  border-radius: 8px;
+  padding: 5px 10px;
+  font-size: 12px;
+  color: var(--text-bright);
+  background: var(--editor-bg);
+}
+
+.toolbarBtn:hover,
+.toolbarBtnActive:hover {
+  background: var(--action-bg);
+}
+
+.toolbarBtnActive {
+  border-color: var(--action-bg);
+  color: var(--accent);
+}
+
+.toolbarMeta {
+  min-width: 44px;
+  text-align: center;
+  font-size: 12px;
+  color: var(--text-bright);
+}
+
+.toolbarPageInput {
+  width: 56px;
+  border: 1px solid var(--panel-border);
+  border-radius: 8px;
+  padding: 5px 8px;
+  font-size: 12px;
+  background: var(--editor-bg);
+  color: var(--text-bright);
+  text-align: center;
+}
+
+.errorState {
+  height: 100%;
+  overflow: auto;
+  background: var(--editor-bg);
+}
+
+.compilingBanner {
+  position: absolute;
+  top: 8px;
+  right: 12px;
+  background: var(--active-border);
+  color: var(--on-accent);
+  font-size: 12px;
+  font-weight: 500;
+  padding: 3px 10px;
+  border-radius: 12px;
+  z-index: 20;
+  pointer-events: none;
+}
+
+/* ── Scrollable page list ───────────────────────────────────────────── */
+
+.pageViewport {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: auto;
+  padding: 20px 24px 32px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 20px;
+}
+
+/* ── Single page card ───────────────────────────────────────────────── */
+
+.page {
+  background: var(--editor-bg);
+  box-shadow: var(--surface-shadow);
+  border-radius: 2px;
+  width: 100%;
+  max-width: 880px;
+  flex-shrink: 0;
+  position: relative;
+  border: 2px solid transparent;
+  transition: border-color 0.18s ease;
+}
+
+.activePage {
+  border-color: var(--active-border);
+}
+
+/* Page number badge — visible on hover */
+.pageLabel {
+  position: absolute;
+  top: 8px;
+  right: 10px;
+  background: var(--overlay-bg);
+  color: var(--on-accent);
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 999px;
+  z-index: 15;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+
+.page:hover .pageLabel {
+  opacity: 1;
+}
+
+/* ── Aspect-ratio frame (padding-top trick) ─────────────────────────── */
+
+/*
+  .previewFrame uses padding-top to enforce aspect ratio.
+  padding-top: X% == height = width * X/100 (percentage is relative to width).
+  The actual content goes inside .previewInner which is abs-positioned to fill it.
+*/
+.previewFrame {
+  position: relative;
+  width: 100%;
+  /* min-height kicks in only when aspect-ratio is not yet known (first paint) */
+  min-height: 200px;
+  box-sizing: border-box;
+}
+
+/* Inner wrapper: fills the padding-box created by .previewFrame */
+.previewInner {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+}
+
+.previewSvg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+}
+
+.previewSvg > svg {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+/* ── Empty / loading states ─────────────────────────────────────────── */
+
+.placeholder {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  gap: 8px;
+  color: var(--muted-text);
+  font-size: 14px;
+  text-align: center;
+  padding: 20px;
+  background: var(--editor-bg);
+}
+
+.hint {
+  font-size: 12px;
+  color: var(--muted-text);
+}
+
+.errorPanel {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  background: var(--editor-bg);
+  font-family: var(--code-font);
+  overflow: hidden;
+}
+
+.errorPanelHeader {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px;
+  background: var(--danger-bg);
+  border-bottom: 1px solid var(--danger-bg);
+  flex-shrink: 0;
+}
+
+.errorPanelTitle {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--danger);
+}
+
+.errorPanelLog {
+  flex: 1;
+  overflow-y: auto;
+  margin: 0;
+  padding: 16px;
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--danger);
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+.placeholder kbd {
+  background: var(--card-bg);
+  border: 1px solid var(--panel-border);
+  border-radius: 3px;
+  padding: 1px 6px;
+  font-size: 11px;
+  color: var(--muted-text);
+}
+
+/* ── Diagnostics panel ──────────────────────────────────────────────── */
+
+.diagnosticsPanel {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 16px;
+  border-bottom: 1px solid var(--panel-border);
+  background: var(--sidebar-bg);
+  color: var(--text-strong);
+}
+
+.diagnosticsHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.diagnosticsHeader strong {
+  font-size: 14px;
+}
+
+.diagnosticsSummary {
+  font-size: 12px;
+  color: var(--muted-text);
+}
+
+.diagnosticsList {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 220px;
+  overflow: auto;
+}
+
+.diagnosticItem {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  text-align: left;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: var(--card-bg);
+  border: 1px solid var(--panel-border);
+  color: inherit;
+}
+
+.diagnosticItem:hover:enabled {
+  background: var(--row-hover);
+}
+
+.diagnosticItem:disabled {
+  opacity: 0.85;
+  cursor: default;
+}
+
+.diagnosticError,
+.diagnosticWarning {
+  padding: 3px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  text-transform: uppercase;
+}
+
+.diagnosticError {
+  background: var(--danger-bg);
+  color: var(--danger);
+}
+
+.diagnosticWarning {
+  background: var(--warning-bg);
+  color: var(--warning);
+}
+
+.diagnosticMessage {
+  flex: 1;
+  min-width: 0;
+}
+
+.diagnosticLocation {
+  font-family: var(--code-font);
+  font-size: 12px;
+  color: var(--muted-text);
+}
+
+.errorPre {
+  font-family: var(--code-font);
+  font-size: 12px;
+  white-space: pre-wrap;
+  word-break: break-all;
+  color: var(--danger);
+  background: var(--danger-bg);
+  border: 1px solid var(--danger);
+  border-radius: 6px;
+  padding: 12px;
+}

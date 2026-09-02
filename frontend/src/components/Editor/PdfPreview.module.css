@@ -1,0 +1,316 @@
+.container {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  background: var(--page-bg);
+}
+
+.inlineErrorBanner {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px 14px;
+  background: var(--danger-bg);
+  border-bottom: 1px solid var(--danger-bg);
+  color: var(--danger);
+  font-size: 12px;
+}
+
+.pdfToolbar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--panel-border);
+  background: var(--card-bg);
+}
+
+.toolbarHint {
+  color: var(--muted-text);
+  font-size: 12px;
+}
+
+.inkModeButton,
+.inkModeButtonActive,
+.primaryAction,
+.secondaryAction {
+  appearance: none;
+  border-radius: 999px;
+  border: 1px solid transparent;
+  padding: 8px 14px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.inkModeButton {
+  background: var(--warning-bg);
+  border-color: var(--warning-bg);
+  color: var(--warning);
+}
+
+.inkModeButtonActive {
+  background: var(--warning);
+  border-color: var(--feature-section);
+  color: var(--on-accent);
+}
+
+.inkComposer {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--panel-border);
+  background: var(--card-bg);
+}
+
+.inkComposerHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  color: var(--warning);
+  font-size: 12px;
+}
+
+.inkComposerInput {
+  width: 100%;
+  border-radius: 12px;
+  border: 1px solid var(--warning-bg);
+  background: var(--card-bg);
+  color: var(--text-bright);
+  padding: 10px 12px;
+  resize: vertical;
+}
+
+.inkComposerActions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.primaryAction {
+  background: var(--warning);
+  border-color: var(--feature-section);
+  color: var(--on-accent);
+}
+
+.secondaryAction {
+  background: var(--card-bg);
+  border-color: var(--panel-border);
+  color: var(--panel-border);
+}
+
+.pdfScroller {
+  flex: 1;
+  overflow: auto;
+  padding: 0;
+  background: var(--page-bg);
+}
+
+.pageCard {
+  width: 100%;
+  margin: 0 0 12px;
+  padding: 0;
+  border-radius: 0;
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+}
+
+.pageViewport {
+  position: relative;
+  width: 100%;
+  max-width: none;
+  margin: 0;
+  border-radius: 0;
+  overflow: hidden;
+  background: var(--editor-bg);
+  box-shadow: var(--surface-shadow-soft);
+}
+
+.pageViewport :global(canvas) {
+  display: block;
+  max-width: 100%;
+  height: auto !important;
+}
+
+.pageViewport :global(.react-pdf__Page__textContent) {
+  opacity: 0.01;
+  pointer-events: none;
+  user-select: text;
+}
+
+.pageOverlay,
+.pageOverlayDrawing {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.pageOverlay {
+  pointer-events: auto;
+  touch-action: pan-x pan-y;
+}
+
+.pageOverlayDrawing {
+  pointer-events: auto;
+  touch-action: none;
+}
+
+.annotationGroup,
+.annotationGroupActive {
+  pointer-events: auto;
+}
+
+.annotationStroke,
+.draftStroke {
+  fill: none;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  vector-effect: non-scaling-stroke;
+}
+
+.annotationStroke {
+  stroke-width: 4px;
+  opacity: 0.82;
+}
+
+.draftStroke {
+  stroke: var(--warning);
+  stroke-width: 4px;
+  opacity: 0.95;
+}
+
+.annotationBounds {
+  fill: var(--warning-bg);
+  stroke: var(--warning-bg);
+  stroke-width: 2px;
+  vector-effect: non-scaling-stroke;
+}
+
+.annotationGroupActive .annotationBounds {
+  fill: var(--warning-bg);
+  stroke: var(--warning-bg);
+}
+
+.annotationChip {
+  width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  padding: 6px 10px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--card-bg);
+  color: var(--text-bright);
+  box-shadow: var(--surface-shadow-soft);
+  font-size: 11px;
+  text-align: left;
+}
+
+.placeholder {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  color: var(--muted-text);
+  font-size: 14px;
+  height: 100%;
+  padding: 20px;
+  text-align: center;
+}
+
+.placeholder kbd {
+  background: var(--card-bg);
+  border: 1px solid var(--panel-border);
+  border-radius: 3px;
+  padding: 1px 6px;
+  font-size: 12px;
+  color: var(--muted-text);
+}
+
+.placeholder strong {
+  color: var(--text-bright);
+}
+
+.spinner {
+  width: 28px;
+  height: 28px;
+  border: 3px solid var(--panel-border);
+  border-top-color: var(--warning);
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+}
+
+.pageLoading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 240px;
+  padding: 20px;
+  color: var(--muted-text);
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.error {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 20px;
+  color: var(--danger);
+  background: var(--danger-bg);
+  overflow: auto;
+}
+
+.error strong {
+  font-size: 14px;
+}
+
+.errorPre {
+  font-family: var(--code-font);
+  font-size: 12px;
+  white-space: pre-wrap;
+  word-break: break-all;
+  color: var(--danger);
+  background: var(--danger-bg);
+  border: 1px solid var(--danger-bg);
+  border-radius: 6px;
+  padding: 12px;
+  flex: 1;
+}
+
+@media (max-width: 960px) {
+  .pdfToolbar,
+  .inkComposer {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .inkComposerActions {
+    width: 100%;
+    justify-content: stretch;
+  }
+
+  .primaryAction,
+  .secondaryAction {
+    flex: 1 1 0;
+  }
+
+  .pdfScroller {
+    padding: 0;
+  }
+
+  .pageCard {
+    padding: 8px;
+    border-radius: 14px;
+  }
+}

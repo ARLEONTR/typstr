@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="120" height="120" viewBox="0 0 120 120" fill="none">
+  <!-- 
+    Typstr Professional Logo
+    Theme: Modern Typography & Geometric Precision
+    Background: Transparent
+  -->
+  
+  <!-- Vertical Stem: Represents the 'I' or the cursor/foundation -->
+  <rect x="52" y="40" width="16" height="60" rx="2" fill="#1E293B"/>
+  
+  <!-- Top Bar Left: Represents structure and slate-like stability -->
+  <rect x="20" y="20" width="38" height="16" rx="2" fill="#1E293B"/>
+  
+  <!-- Top Bar Right: Represents the digital/AI/azure component of Typstr -->
+  <rect x="62" y="20" width="38" height="16" rx="2" fill="#3B82F6"/>
+  
+  <!-- Subtle Accent: A cursor-like blink at the bottom of the stem -->
+  <rect x="52" y="92" width="16" height="8" rx="1" fill="#60A5FA" fill-opacity="0.6"/>
+</svg>

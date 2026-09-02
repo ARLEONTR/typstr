@@ -1,0 +1,10 @@
+{$DOMAIN_NAME} {
+  encode gzip zstd
+  reverse_proxy nginx:80 {
+    header_up X-Forwarded-Proto {scheme}
+  }
+}
+
+www.{$DOMAIN_NAME} {
+  redir https://{$DOMAIN_NAME}{uri} permanent
+}

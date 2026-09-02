@@ -1,0 +1,78 @@
+FROM texlive/texlive:latest
+
+# Install Node.js 20, common toolchain utilities, and a broad set of open-source
+# fonts. This covers what Typst templates typically request (Latin Modern, TeX
+# Gyre, STIX, Liberation, DejaVu, Noto incl. CJK + emoji, Inconsolata, Hack,
+# Fira Code, JetBrains Mono, Roboto, Open Sans, Lato, CMU, EB Garamond,
+# Linux Libertine) so `typst compile` no longer emits "unknown font family".
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    curl \
+    ca-certificates \
+    gnupg \
+    wget \
+    xz-utils \
+    postgresql-client \
+    fontconfig \
+    fonts-lmodern \
+    fonts-texgyre \
+    fonts-stix \
+    fonts-liberation \
+    fonts-liberation2 \
+    fonts-dejavu \
+    fonts-dejavu-extra \
+    fonts-noto \
+    fonts-noto-core \
+    fonts-noto-extra \
+    fonts-noto-cjk \
+    fonts-noto-color-emoji \
+    fonts-inconsolata \
+    fonts-hack \
+    fonts-firacode \
+    #fonts-jetbrains-mono \
+    fonts-roboto \
+    fonts-open-sans \
+    fonts-lato \
+    fonts-crosextra-caladea \
+    fonts-crosextra-carlito \
+    fonts-cmu \
+    fonts-ebgaramond \
+    fonts-linuxlibertine \
+  && curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
+  && apt-get install -y nodejs \
+  && rm -rf /var/lib/apt/lists/*
+
+# Configure fontconfig to include TeX Live fonts (Opentype and Truetype)
+RUN mkdir -p /etc/fonts/conf.d \
+  && echo '<?xml version="1.0"?><!DOCTYPE fontconfig SYSTEM "fonts.dtd"><fontconfig><dir>/usr/local/texlive</dir><dir>/usr/share/fonts/typst</dir><alias><family>Times New Roman</family><prefer><family>Liberation Serif</family></prefer></alias><alias><family>Arial</family><prefer><family>Liberation Sans</family></prefer></alias><alias><family>Helvetica</family><prefer><family>Liberation Sans</family></prefer></alias><alias><family>Calibri</family><prefer><family>Carlito</family><family>Liberation Sans</family></prefer></alias><alias><family>Cambria</family><prefer><family>Caladea</family><family>Liberation Serif</family></prefer></alias><alias><family>Cambria Math</family><prefer><family>New Computer Modern Math</family><family>STIX Two Math</family></prefer></alias><alias><family>Courier New</family><prefer><family>Liberation Mono</family></prefer></alias></fontconfig>' > /etc/fonts/local.conf
+
+# Install Typst's default font bundle from typst-assets (Libertinus Serif,
+# New Computer Modern + NCM Math, DejaVu Sans Mono). These are the families
+# Typst expects by default and aren't all packaged in Debian.
+RUN mkdir -p /usr/share/fonts/typst \
+  && for font in \
+        DejaVuSansMono.ttf DejaVuSansMono-Bold.ttf \
+        DejaVuSansMono-Oblique.ttf DejaVuSansMono-BoldOblique.ttf \
+        LibertinusSerif-Regular.otf LibertinusSerif-Italic.otf \
+        LibertinusSerif-Bold.otf LibertinusSerif-BoldItalic.otf \
+        LibertinusSerif-Semibold.otf LibertinusSerif-SemiboldItalic.otf \
+        NewCM10-Regular.otf NewCM10-Italic.otf \
+        NewCM10-Bold.otf NewCM10-BoldItalic.otf \
+        NewCMMath-Book.otf NewCMMath-Regular.otf NewCMMath-Bold.otf; do \
+      curl -fsSL "https://raw.githubusercontent.com/typst/typst-assets/main/files/fonts/${font}" \
+        -o "/usr/share/fonts/typst/${font}"; \
+    done \
+  && fc-cache -fv
+
+# Add node user to match node:20-slim behavior
+RUN if getent group 1000; then \
+      groupmod -n node $(getent group 1000 | cut -d: -f1); \
+    else \
+      groupadd --gid 1000 node; \
+    fi \
+  && if getent passwd 1000; then \
+      usermod -l node -g 1000 -m -d /home/node -s /bin/bash $(getent passwd 1000 | cut -d: -f1); \
+    else \
+      useradd --uid 1000 --gid 1000 --shell /bin/bash --create-home node; \
+    fi
+
+WORKDIR /app

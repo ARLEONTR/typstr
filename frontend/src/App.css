@@ -1,0 +1,1035 @@
+.authScreen,
+.landingPage {
+  min-height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 32px;
+  background: var(--page-bg);
+}
+
+.authScreen {
+  font-size: 15px;
+  color: var(--text-soft);
+}
+
+.landingPanel {
+  width: min(720px, 100%);
+  padding: 48px;
+  border: 1px solid var(--panel-border);
+  border-radius: 28px;
+  background: var(--card-bg);
+  box-shadow: var(--surface-shadow);
+}
+
+.landingEyebrow {
+  display: inline-flex;
+  margin-bottom: 18px;
+  padding: 6px 12px;
+  border-radius: 999px;
+  background: var(--action-bg);
+  color: var(--accent);
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.landingPanel h1 {
+  font-size: clamp(36px, 7vw, 64px);
+  line-height: 0.95;
+  margin-bottom: 18px;
+  color: var(--text-bright);
+}
+
+.landingPanel p {
+  max-width: 54ch;
+  margin-bottom: 28px;
+  color: var(--text-soft);
+  line-height: 1.6;
+}
+
+.landingButton {
+  background: var(--accent);
+  color: var(--on-accent);
+  font-weight: 700;
+  padding: 12px 20px;
+}
+
+.googleButton {
+  display: inline-flex;
+  align-items: center;
+  gap: 14px;
+  min-width: min(100%, 360px);
+  padding: 14px 18px;
+  border: 1px solid color-mix(in srgb, var(--panel-border) 75%, white 25%);
+  border-radius: 18px;
+  background: linear-gradient(180deg, color-mix(in srgb, var(--card-bg) 88%, white 12%) 0%, var(--card-bg) 100%);
+  color: var(--text-bright);
+  font-weight: 700;
+  box-shadow: 0 18px 40px rgba(15, 23, 42, 0.12);
+  transition: transform 140ms ease, box-shadow 140ms ease, border-color 140ms ease;
+}
+
+.googleButton:hover {
+  transform: translateY(-1px);
+  border-color: color-mix(in srgb, var(--accent) 45%, var(--panel-border) 55%);
+  box-shadow: 0 22px 50px rgba(15, 23, 42, 0.16);
+}
+
+.googleButtonMark {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 42px;
+  height: 42px;
+  border-radius: 14px;
+  background: white;
+  flex: 0 0 auto;
+  box-shadow: inset 0 0 0 1px rgba(15, 23, 42, 0.08);
+}
+
+.googleButtonMark svg {
+  width: 22px;
+  height: 22px;
+}
+
+.googleButtonText {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  text-align: left;
+}
+
+.googleButtonText small {
+  color: var(--text-soft);
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.loginButtonGroup {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+}
+
+.ldapButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 14px;
+  min-width: min(100%, 360px);
+  padding: 14px 20px;
+  border: 1px solid var(--panel-border);
+  border-radius: 18px;
+  background: var(--surface-card);
+  color: var(--text-bright);
+  font-weight: 600;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+  cursor: pointer;
+  transition: transform 0.15s ease, border-color 0.15s ease, background 0.15s ease;
+}
+
+.ldapButton:hover {
+  transform: translateY(-1px);
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--surface-card) 90%, var(--accent) 10%);
+}
+
+.ldapButtonMark {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 38px;
+  height: 38px;
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--accent) 15%, transparent);
+  color: var(--accent);
+}
+
+.ldapButtonText {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  text-align: left;
+}
+
+.ldapButtonText small {
+  color: var(--text-soft);
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.devLoginButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: min(100%, 360px);
+  margin-top: 4px;
+  padding: 12px 18px;
+  border: 1px dashed color-mix(in srgb, var(--panel-border) 70%, var(--accent) 30%);
+  border-radius: 16px;
+  background: color-mix(in srgb, var(--action-bg) 82%, white 18%);
+  color: var(--text-bright);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.devLoginButton:hover {
+  border-color: color-mix(in srgb, var(--accent) 50%, var(--panel-border) 50%);
+  background: color-mix(in srgb, var(--action-bg) 70%, white 30%);
+}
+
+.landingButton.secondary {
+  margin-top: 12px;
+  background: var(--action-bg);
+  color: var(--text-bright);
+}
+
+.landingLegal {
+  margin-top: 24px;
+  margin-bottom: 0;
+  font-size: 13px;
+  color: var(--muted-text);
+}
+
+.landingLegal a {
+  color: var(--text-soft);
+}
+
+/* LDAP Modal */
+.ldapModalOverlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.65);
+  backdrop-filter: blur(4px);
+  padding: 16px;
+}
+
+.ldapModal {
+  position: relative;
+  width: 100%;
+  max-width: 440px;
+  padding: 28px;
+  border-radius: 20px;
+  background: var(--panel-bg, #1a1a24);
+  border: 1px solid var(--panel-border, #2a2a38);
+  box-shadow: 0 20px 48px rgba(0, 0, 0, 0.45);
+  color: var(--text-bright, #fff);
+  animation: modalFadeIn 0.2s ease-out;
+}
+
+@keyframes modalFadeIn {
+  from {
+    opacity: 0;
+    transform: scale(0.96) translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+.ldapModalHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 20px;
+}
+
+.ldapModalHeader h3 {
+  margin: 0;
+  font-size: 1.25rem;
+  font-weight: 700;
+}
+
+.ldapCloseButton {
+  background: none;
+  border: none;
+  color: var(--text-soft, #888);
+  font-size: 1.2rem;
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: 8px;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.ldapCloseButton:hover {
+  background: var(--action-bg, #282838);
+  color: var(--text-bright, #fff);
+}
+
+.ldapForm {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.ldapErrorBanner {
+  padding: 10px 14px;
+  border-radius: 10px;
+  background: rgba(234, 67, 53, 0.15);
+  border: 1px solid rgba(234, 67, 53, 0.3);
+  color: #ff8577;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.ldapField {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  text-align: left;
+}
+
+.ldapField span {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-soft, #aaa);
+}
+
+.ldapInput {
+  width: 100%;
+  padding: 12px 14px;
+  border-radius: 12px;
+  border: 1px solid var(--panel-border, #333345);
+  background: var(--surface-card, #12121a);
+  color: var(--text-bright, #fff);
+  font-size: 14px;
+  outline: none;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+  box-sizing: border-box;
+}
+
+.ldapInput:focus {
+  border-color: var(--accent, #6366f1);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent, #6366f1) 25%, transparent);
+}
+
+.ldapSubmitButton {
+  margin-top: 6px;
+  padding: 13px 20px;
+  border: none;
+  border-radius: 14px;
+  background: var(--accent, #6366f1);
+  color: #fff;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: filter 0.15s ease, transform 0.1s ease;
+}
+
+.ldapSubmitButton:hover:not(:disabled) {
+  filter: brightness(1.1);
+  transform: translateY(-1px);
+}
+
+.ldapSubmitButton:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.ldapQuickFillSection {
+  margin-top: 10px;
+  padding-top: 14px;
+  border-top: 1px solid var(--panel-border, #282838);
+}
+
+.ldapQuickFillList {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.ldapQuickFillBadge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 12px;
+  border-radius: 10px;
+  border: 1px solid var(--panel-border, #333348);
+  background: var(--surface-card, #12121a);
+  color: var(--text-bright, #ddd);
+  font-size: 12px;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+}
+
+.ldapQuickFillBadge:hover {
+  border-color: var(--accent, #6366f1);
+  background: color-mix(in srgb, var(--accent, #6366f1) 15%, transparent);
+}
+
+@media (max-width: 720px) {
+  .landingPanel {
+    padding: 28px;
+  }
+
+  .googleButton {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .devLoginButton {
+    width: 100%;
+    min-width: 0;
+  }
+}
+
+.verificationScreen {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: 32px;
+  background: var(--page-bg);
+}
+
+.verificationPanel {
+  width: min(620px, 100%);
+  padding: 40px;
+  border: 1px solid var(--panel-border);
+  border-radius: 24px;
+  background: var(--card-bg);
+  box-shadow: var(--surface-shadow);
+}
+
+.verificationPanel h1 {
+  margin: 0 0 16px;
+  color: var(--text-bright);
+  font-size: 34px;
+  line-height: 1.08;
+}
+
+.verificationPanel p {
+  color: var(--text-soft);
+  line-height: 1.6;
+}
+
+.verificationPanel label {
+  display: grid;
+  gap: 8px;
+  margin: 18px 0 12px;
+  color: var(--text-soft);
+  font-weight: 700;
+}
+
+.verificationPanel input {
+  width: 100%;
+  box-sizing: border-box;
+  border: 1px solid var(--panel-border);
+  border-radius: 12px;
+  background: var(--editor-bg);
+  color: var(--text-bright);
+  padding: 12px 14px;
+}
+
+.verificationPanel code {
+  color: var(--accent);
+}
+
+.verificationMessage {
+  margin-top: 16px;
+  color: var(--success) !important;
+}
+
+.billingBanner {
+  position: fixed;
+  right: 18px;
+  bottom: 18px;
+  z-index: 30;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  max-width: calc(100vw - 36px);
+  padding: 10px 12px;
+  border: 1px solid var(--panel-border);
+  border-radius: 8px;
+  background: var(--card-bg);
+  color: var(--text-bright);
+  box-shadow: var(--surface-shadow-soft);
+  font-size: 12px;
+  text-transform: capitalize;
+}
+
+.billingBanner span {
+  color: var(--text-soft);
+  text-transform: none;
+}
+
+.planLimitBackdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: var(--overlay-bg);
+}
+
+.planLimitModal {
+  width: min(420px, 100%);
+  padding: 28px;
+  border: 1px solid var(--panel-border);
+  border-radius: 8px;
+  background: var(--card-bg);
+  color: var(--text-bright);
+  box-shadow: var(--surface-shadow);
+}
+
+.planLimitModal h2 {
+  margin: 0 0 10px;
+  font-size: 22px;
+}
+
+.planLimitModal p {
+  color: var(--text-soft);
+  line-height: 1.5;
+}
+
+@media (max-width: 720px) {
+  .verificationPanel {
+    padding: 28px;
+  }
+
+  .billingBanner {
+    left: 12px;
+    right: 12px;
+    bottom: 12px;
+    flex-wrap: wrap;
+  }
+}
+.legalPage {
+  height: 100vh;
+  overflow-y: auto;
+  padding: 48px 24px;
+  background: var(--page-bg);
+}
+
+.legalPanel {
+  max-width: 780px;
+  margin: 0 auto;
+  padding: 48px;
+  border: 1px solid var(--panel-border);
+  border-radius: 24px;
+  background: var(--card-bg);
+  box-shadow: var(--surface-shadow);
+  line-height: 1.65;
+}
+
+.legalHeader h1 {
+  margin: 12px 0 4px;
+  font-size: 36px;
+  color: var(--text-bright);
+}
+
+.legalBack {
+  color: var(--accent);
+  font-size: 13px;
+  text-decoration: none;
+}
+
+.legalUpdated {
+  color: var(--muted-text);
+  font-size: 13px;
+  margin: 0 0 24px;
+}
+
+.legalBody h2 {
+  margin-top: 28px;
+  margin-bottom: 8px;
+  font-size: 18px;
+  color: var(--text-strong);
+}
+
+.legalBody p,
+.legalBody li {
+  color: var(--text-soft);
+}
+
+.legalBody a {
+  color: var(--accent);
+}
+
+.legalBody ul {
+  padding-left: 20px;
+}
+
+.reviewWorkspace {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  background: var(--editor-bg);
+  color: var(--text-bright);
+}
+
+.reviewWorkspaceTopbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--panel-border);
+  background: var(--sidebar-bg);
+}
+
+.reviewTitleBlock {
+  min-width: 0;
+}
+
+.reviewWorkspaceTopbar h1 {
+  margin: 0;
+  font-size: 19px;
+  line-height: 1.2;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.reviewWorkspaceTopbar p,
+.reviewCard p {
+  margin: 0;
+  color: var(--text-soft);
+}
+
+.reviewMetaBar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 7px;
+}
+
+.reviewMetaBar span {
+  display: inline-flex;
+  align-items: center;
+  min-height: 22px;
+  padding: 0 8px;
+  border-radius: 999px;
+  border: 1px solid var(--panel-border);
+  background: transparent;
+  color: var(--muted-text);
+  font-size: 11px;
+  line-height: 1;
+}
+
+.reviewIdentity {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.reviewToolbarGroup,
+.reviewIdentityFields {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.reviewIconButton {
+  width: 32px;
+  height: 32px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--panel-border);
+  border-radius: 7px;
+  background: transparent;
+  color: var(--accent);
+}
+
+.reviewIconButton:hover:not(:disabled) {
+  background: var(--row-hover);
+}
+
+.reviewIconButton:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.reviewIdentity input,
+.reviewCard textarea,
+.reviewCard select {
+  border: 1px solid var(--panel-border);
+  border-radius: 8px;
+  background: var(--editor-bg);
+  color: var(--text-bright);
+}
+
+.reviewIdentity input {
+  width: 164px;
+  padding: 7px 9px;
+  font-size: 12px;
+}
+
+.reviewWorkspaceGrid {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+}
+
+.reviewEditorPane {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+}
+
+.reviewEditorPane > div:last-child,
+.reviewPreviewPane > div {
+  height: 100%;
+}
+
+.reviewPanelGroup {
+  width: 100%;
+  min-height: 0;
+}
+
+.reviewResizeHandle {
+  position: relative;
+  width: 8px;
+  flex: 0 0 8px;
+  background: var(--panel-border);
+  box-shadow: none;
+  cursor: col-resize;
+  transition: background 120ms ease, box-shadow 120ms ease;
+}
+
+.reviewResizeHandle::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 2px;
+  height: 36px;
+  border-radius: 999px;
+  transform: translate(-50%, -50%);
+  background: color-mix(in srgb, var(--text-soft) 70%, transparent);
+}
+
+.reviewResizeHandle:hover,
+.reviewResizeHandle[data-resize-handle-active] {
+  background: color-mix(in srgb, var(--accent) 24%, var(--panel-border));
+  box-shadow: none;
+}
+
+.reviewBrandLine {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.reviewBrandLine img {
+  width: 34px;
+  height: 34px;
+}
+
+.reviewFileStrip {
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--panel-border);
+  background: var(--sidebar-bg);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.reviewFileStrip span {
+  flex: 0 0 auto;
+  color: var(--muted-text);
+  font-size: 11px;
+}
+
+.reviewFileStrip select {
+  width: 100%;
+  min-width: 0;
+  padding: 6px 8px;
+  border: 1px solid var(--panel-border);
+  border-radius: 8px;
+  background: var(--editor-bg);
+  color: var(--text-bright);
+}
+
+.reviewPreviewPane {
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  background: var(--preview-bg, var(--editor-bg));
+}
+
+.reviewPreviewPlaceholder {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  gap: 8px;
+  padding: 24px;
+  color: var(--text-soft);
+  text-align: center;
+}
+
+.reviewPreviewPlaceholder h2 {
+  margin: 0;
+  color: var(--text-bright);
+  font-size: 16px;
+}
+
+.reviewCompileErrors {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 12px;
+  max-height: min(44vh, 420px);
+  overflow: auto;
+  color: var(--text-bright);
+}
+
+.reviewCompileErrors > strong {
+  font-size: 13px;
+}
+
+.reviewCompileErrors article {
+  display: grid;
+  gap: 4px;
+  padding: 10px;
+  border: 1px solid color-mix(in srgb, #ef4444 45%, var(--panel-border));
+  border-radius: 8px;
+  background: color-mix(in srgb, #ef4444 9%, var(--card-bg));
+}
+
+.reviewCompileErrors article span {
+  width: fit-content;
+  padding: 2px 7px;
+  border-radius: 999px;
+  background: color-mix(in srgb, #ef4444 14%, var(--panel-bg));
+  color: #fca5a5;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.reviewCompileErrors article p {
+  margin: 0;
+  color: var(--text-bright);
+  white-space: pre-wrap;
+}
+
+.reviewCompileErrors article small {
+  color: var(--text-soft);
+  font-family: var(--editor-font, monospace);
+}
+
+.reviewZenMode {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  background: var(--page-bg);
+}
+
+.reviewZenMode .reviewWorkspaceTopbar {
+  display: none;
+}
+
+.reviewZenMode .reviewWorkspaceGrid {
+  height: 100vh;
+}
+
+.reviewZenMode .reviewFileStrip {
+  padding-right: 56px;
+}
+
+.reviewZenExit {
+  position: fixed;
+  top: 12px;
+  right: 12px;
+  z-index: 60;
+  width: 38px;
+  height: 38px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--panel-border);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--panel-bg) 92%, transparent);
+  color: var(--accent);
+  box-shadow: var(--shadow-soft);
+}
+
+.reviewSidebar {
+  min-height: 0;
+  overflow: auto;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  background: var(--sidebar-bg);
+}
+
+.reviewCard {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 0 0 14px;
+  border: 0;
+  border-bottom: 1px solid var(--panel-border);
+  border-radius: 0;
+  background: transparent;
+}
+
+.reviewCard:last-child {
+  border-bottom: 0;
+  padding-bottom: 0;
+}
+
+.reviewCard h2 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  font-size: 13px;
+  color: var(--text-bright);
+}
+
+.reviewCard textarea {
+  width: 100%;
+  padding: 10px;
+  resize: vertical;
+}
+
+.reviewCard select {
+  padding: 8px 10px;
+}
+
+.reviewSelection {
+  max-height: 92px;
+  overflow: auto;
+  padding: 8px;
+  border-radius: 8px;
+  background: var(--action-bg);
+  color: var(--text-soft);
+  font-size: 12px;
+}
+
+.reviewMessage,
+.reviewEmptyState {
+  padding: 9px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--panel-border);
+  color: var(--text-soft);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.reviewMessage {
+  border-color: color-mix(in srgb, var(--success) 34%, var(--panel-border));
+  background: color-mix(in srgb, var(--success-bg) 60%, transparent);
+  color: var(--text-bright);
+}
+
+.reviewEmptyState {
+  background: transparent;
+}
+
+.reviewThread {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px;
+  border: 1px solid var(--panel-border);
+  border-radius: 7px;
+  background: color-mix(in srgb, var(--editor-bg) 55%, transparent);
+}
+
+.reviewThread.active {
+  border-color: var(--accent);
+  background: var(--active-bg);
+}
+
+.reviewThread > button {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 0;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+}
+
+.reviewThread span,
+.reviewReply {
+  color: var(--muted-text);
+  font-size: 12px;
+}
+
+.reviewReply {
+  padding-left: 10px;
+  border-left: 2px solid var(--panel-border);
+}
+
+.reviewSmallButton {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  align-self: flex-start;
+  padding: 7px 10px;
+  border-radius: 8px;
+  background: var(--action-bg);
+  color: var(--accent);
+}
+
+.reviewPrimaryButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 10px 14px;
+  border-radius: 8px;
+  background: var(--accent);
+  color: var(--on-accent);
+  font-weight: 700;
+}
+
+.reviewPrimaryButton:disabled,
+.reviewSmallButton:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.reviewDiff {
+  max-height: 240px;
+  overflow: auto;
+  margin: 0;
+  padding: 10px;
+  border-radius: 8px;
+  background: var(--editor-bg);
+  color: var(--text-soft);
+  white-space: pre-wrap;
+}
+
+@media (max-width: 900px) {
+  .reviewPanelGroup {
+    flex-direction: column !important;
+  }
+
+  .reviewSidebar {
+    max-height: none;
+  }
+
+  .reviewIdentity {
+    flex-direction: column;
+  }
+}
+
+@media (max-width: 720px) {
+  .legalPanel {
+    padding: 28px;
+  }
+}

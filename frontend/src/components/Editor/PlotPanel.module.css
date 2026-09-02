@@ -1,0 +1,367 @@
+/* PlotPanel.module.css */
+
+.panel {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  padding-bottom: 16px;
+}
+
+/* ── Inner tab bar (CSV Plot / Templates) ─────────────────────────────── */
+
+.innerTabBar {
+  display: flex;
+  gap: 4px;
+  background: transparent;
+  border: 0;
+  border-bottom: 1px solid var(--panel-border);
+  border-radius: 0;
+  padding: 0 0 6px;
+}
+
+.innerTab {
+  flex: 1;
+  padding: 6px 10px;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--muted-text);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  transition: background 0.12s, color 0.12s;
+}
+
+.innerTab:hover {
+  color: var(--text-soft);
+}
+
+.innerTabActive {
+  background: var(--active-bg);
+  color: var(--text-bright);
+}
+
+/* ── Section card ─────────────────────────────────────────────────────── */
+
+.section {
+  padding: 12px 0;
+  border: 0;
+  border-top: 1px solid var(--panel-border);
+  border-radius: 0;
+  background: transparent;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.sectionTitle {
+  color: var(--text-bright);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+/* ── Upload zone ──────────────────────────────────────────────────────── */
+
+.uploadZone {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 20px 16px;
+  border: 1.5px dashed var(--panel-border);
+  border-radius: 10px;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+  background: transparent;
+  color: var(--muted-text);
+  font-size: 13px;
+  text-align: center;
+  width: 100%;
+}
+
+.uploadZone:hover,
+.uploadZoneDragging {
+  border-color: var(--accent-strong);
+  background: var(--active-bg);
+  color: var(--text-soft);
+}
+
+.uploadZoneIcon {
+  font-size: 22px;
+  line-height: 1;
+}
+
+.uploadZoneHint {
+  font-size: 11px;
+  color: var(--muted-text);
+}
+
+.hiddenInput {
+  display: none;
+}
+
+/* ── CSV preview table ────────────────────────────────────────────────── */
+
+.csvPreview {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.csvFileName {
+  font-size: 12px;
+  color: var(--text-soft);
+  font-family: var(--code-font);
+}
+
+.csvMeta {
+  font-size: 12px;
+  color: var(--muted-text);
+}
+
+.csvTableWrapper {
+  overflow-x: auto;
+  border-radius: 8px;
+  border: 1px solid var(--panel-border);
+  max-height: 140px;
+  overflow-y: auto;
+}
+
+.csvTable {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 11px;
+  font-family: var(--code-font);
+}
+
+.csvTable th {
+  background: var(--editor-bg);
+  color: var(--text-bright);
+  padding: 5px 8px;
+  text-align: left;
+  border-bottom: 1px solid var(--panel-border);
+  white-space: nowrap;
+  position: sticky;
+  top: 0;
+  z-index: 1;
+}
+
+.csvTable td {
+  color: var(--text-soft);
+  padding: 4px 8px;
+  border-bottom: 1px solid var(--panel-border);
+  white-space: nowrap;
+}
+
+.clearBtn {
+  align-self: flex-start;
+  width: 34px;
+  height: 34px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border-radius: 8px;
+  background: var(--danger-bg);
+  color: var(--danger);
+  border: 1px solid var(--danger-bg);
+  cursor: pointer;
+}
+
+.clearBtn:hover {
+  background: var(--danger-bg);
+}
+
+/* ── Form fields ──────────────────────────────────────────────────────── */
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.fieldLabel {
+  font-size: 12px;
+  color: var(--text-soft);
+  font-weight: 500;
+}
+
+.fieldSelect,
+.fieldInput {
+  width: 100%;
+  padding: 7px 10px;
+  border-radius: 8px;
+  background: var(--editor-bg);
+  color: var(--text-bright);
+  border: 1px solid var(--panel-border);
+  font-size: 12px;
+}
+
+.fieldSelect:focus,
+.fieldInput:focus {
+  outline: none;
+  border-color: var(--accent-strong);
+}
+
+.fieldRow {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+/* ── Chart type chips ─────────────────────────────────────────────────── */
+
+.chartTypeRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.chartChip {
+  padding: 5px 10px;
+  border-radius: 8px;
+  font-size: 12px;
+  background: var(--action-bg);
+  color: var(--text-soft);
+  border: 1px solid var(--action-border);
+  cursor: pointer;
+  transition: background 0.12s, color 0.12s;
+}
+
+.chartChip:hover {
+  background: var(--row-hover);
+}
+
+.chartChipActive {
+  background: var(--active-bg);
+  color: var(--text-bright);
+  border-color: var(--active-border);
+}
+
+/* ── Generated snippet ────────────────────────────────────────────────── */
+
+.snippetBox {
+  background: var(--editor-bg);
+  border: 1px solid var(--panel-border);
+  border-radius: 10px;
+  padding: 10px 12px;
+  font-family: var(--code-font);
+  font-size: 11px;
+  color: var(--text-soft);
+  white-space: pre;
+  overflow-x: auto;
+  max-height: 220px;
+  overflow-y: auto;
+  line-height: 1.55;
+}
+
+.snippetActions {
+  display: flex;
+  gap: 8px;
+}
+
+.copyBtn {
+  width: 34px;
+  height: 34px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border-radius: 8px;
+  font-size: 12px;
+  background: var(--action-bg);
+  color: var(--text-soft);
+  border: 1px solid var(--action-border);
+  cursor: pointer;
+  transition: background 0.12s;
+}
+
+.copyBtn:hover {
+  background: var(--action-bg);
+}
+
+.insertBtn {
+  width: 34px;
+  height: 34px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  padding: 0;
+  border-radius: 8px;
+  font-size: 12px;
+  background: var(--accent-strong);
+  color: var(--on-accent);
+  border: none;
+  cursor: pointer;
+  transition: background 0.12s;
+}
+
+.insertBtn:hover {
+  background: var(--accent-hover);
+}
+
+.insertBtn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+/* ── Template grid ────────────────────────────────────────────────────── */
+
+.templateGrid {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.templateCard {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: var(--card-bg);
+  border: 1px solid var(--panel-border);
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.12s, border-color 0.12s;
+}
+
+.templateCard:hover {
+  background: var(--row-hover);
+  border-color: var(--active-border);
+}
+
+.templateCardActive {
+  background: var(--active-bg);
+  border-color: var(--active-border);
+}
+
+.templateName {
+  color: var(--text-bright);
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.templateDesc {
+  color: var(--muted-text);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+/* ── Hint text ────────────────────────────────────────────────────────── */
+
+.hint {
+  color: var(--muted-text);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.errorText {
+  color: var(--danger);
+  font-size: 12px;
+}

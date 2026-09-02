@@ -1,0 +1,76 @@
+\documentclass[12pt]{article}
+\usepackage{amsmath,amssymb,amsthm}
+\usepackage{geometry}
+\geometry{margin=2.5cm}
+
+\newtheorem{theorem}{Theorem}
+\newtheorem{lemma}{Lemma}
+
+\title{Complex Stress Test Document}
+\author{typstr-stress-test}
+\date{}
+
+\begin{document}
+\maketitle
+\tableofcontents
+
+\section{Introduction}
+This document exercises more \LaTeX{} features for load testing purposes.
+
+\section{Mathematics}
+\subsection{Calculus}
+Let $f : \mathbb{R} \to \mathbb{R}$ be a differentiable function. The fundamental
+theorem of calculus states:
+\begin{equation}
+  \int_a^b f'(x)\,dx = f(b) - f(a).
+\end{equation}
+
+\subsection{Linear Algebra}
+For an $n \times n$ matrix $A$ with eigenvalues $\lambda_1, \dots, \lambda_n$:
+\begin{equation}
+  \det(A) = \prod_{i=1}^{n} \lambda_i, \qquad \operatorname{tr}(A) = \sum_{i=1}^{n} \lambda_i.
+\end{equation}
+
+\begin{theorem}[Cauchy-Schwarz]
+For vectors $\mathbf{u}, \mathbf{v} \in \mathbb{R}^n$:
+\[
+  |\langle \mathbf{u}, \mathbf{v} \rangle|^2 \le \langle \mathbf{u}, \mathbf{u} \rangle \cdot \langle \mathbf{v}, \mathbf{v} \rangle.
+\]
+\end{theorem}
+
+\begin{lemma}
+If $A$ is positive definite, then all eigenvalues are positive.
+\end{lemma}
+
+\section{Tables and Lists}
+
+\subsection{Data Table}
+\begin{center}
+\begin{tabular}{lccc}
+  \hline
+  Method    & Precision & Recall & F1-Score \\
+  \hline
+  Baseline  & 0.72      & 0.68   & 0.70     \\
+  Proposed  & 0.89      & 0.91   & 0.90     \\
+  Oracle    & 1.00      & 1.00   & 1.00     \\
+  \hline
+\end{tabular}
+\end{center}
+
+\subsection{Itemized List}
+\begin{itemize}
+  \item First item with some descriptive text.
+  \item Second item: $\alpha + \beta = \gamma$.
+  \item Third item referencing equation~(1).
+  \item Fourth item with a nested list:
+    \begin{enumerate}
+      \item Sub-item A
+      \item Sub-item B
+    \end{enumerate}
+\end{itemize}
+
+\section{Conclusion}
+This document exercises theorem environments, multi-level lists, tables, and
+advanced mathematical typesetting to provide a realistic compilation workload.
+
+\end{document}

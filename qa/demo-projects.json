@@ -1,0 +1,35 @@
+[
+  {
+    "id": "demo-paper",
+    "title": "Demo Research Paper",
+    "description": "Typst academic paper with figures, citations, comments, and compile-limit examples.",
+    "entryFile": "main.typ",
+    "files": [
+      "main.typ",
+      "references.bib",
+      "figures/plot.png"
+    ]
+  },
+  {
+    "id": "demo-thesis",
+    "title": "Demo Thesis Workspace",
+    "description": "Multi-file thesis project with chapters, bibliography, and appendix content.",
+    "entryFile": "thesis.typ",
+    "files": [
+      "thesis.typ",
+      "chapters/introduction.typ",
+      "chapters/methods.typ",
+      "appendix/data.typ"
+    ]
+  },
+  {
+    "id": "demo-slides",
+    "title": "Demo Presentation Deck",
+    "description": "Polylux-style slides with speaker notes and exported preview assets.",
+    "entryFile": "slides.typ",
+    "files": [
+      "slides.typ",
+      "assets/cover.png"
+    ]
+  }
+]

@@ -1,0 +1,7 @@
+**/node_modules
+backend/dist
+**/*.db
+**/*.db-shm
+**/*.db-wal
+backend/data/
+# frontend/dist is intentionally included — pre-built on host, copied into nginx image

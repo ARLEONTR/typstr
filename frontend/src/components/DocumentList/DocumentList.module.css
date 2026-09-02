@@ -1,0 +1,1203 @@
+.dashboard {
+  display: flex;
+  height: 100vh;
+  width: 100vw;
+  overflow: hidden;
+  background: var(--page-bg);
+  color: var(--text-soft);
+  font-family: var(--ui-font);
+  font-size: var(--ui-font-size);
+}
+
+.sidebar {
+  width: 72px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 20px 0;
+  border-right: 1px solid var(--panel-border);
+  background: var(--sidebar-bg);
+  backdrop-filter: blur(10px);
+  z-index: 100;
+}
+
+.sidebarLogo {
+  margin-bottom: 32px;
+}
+
+.sidebarLogo img {
+  width: 32px;
+  height: 32px;
+}
+
+.sidebarNav {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  width: 100%;
+  align-items: center;
+}
+
+.sidebarFooter {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  width: 100%;
+  align-items: center;
+  margin-top: auto;
+}
+
+.sidebarBtn {
+  width: 30px;
+  height: 30px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 7px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--muted-text);
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.sidebarBtn:hover {
+  background: var(--action-bg-hover);
+  color: var(--accent);
+}
+
+.sidebarBtnActive {
+  background: var(--active-bg);
+  color: var(--accent);
+  border: 1px solid var(--active-border);
+}
+
+.content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  overflow-y: auto;
+}
+
+.page {
+  display: none; /* Replaced by .dashboard */
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 20px 32px;
+  border-bottom: 1px solid var(--panel-border);
+  background: var(--page-bg);
+  backdrop-filter: blur(10px);
+}
+
+.userRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.headerAvatar {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  object-fit: cover;
+  flex-shrink: 0;
+  border: 2px solid var(--active-border);
+}
+
+.kicker {
+  margin: 0;
+  color: var(--accent);
+  font-size: 12px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.header h1 {
+  margin: 0;
+  font-size: 30px;
+  font-weight: 700;
+  color: var(--text-bright);
+}
+
+.headerSubtitle {
+  margin: 8px 0 0;
+  max-width: 640px;
+  color: var(--muted-text);
+  line-height: 1.6;
+}
+
+.headerActions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.notificationWrap {
+  position: relative;
+}
+
+.notificationBtn {
+  position: relative;
+}
+
+.notificationBtnActive {
+  background: var(--active-bg);
+  color: var(--accent);
+  border: 1px solid var(--active-border);
+}
+
+.notificationBadge {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: var(--accent);
+  color: var(--page-bg);
+  font-size: 11px;
+  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.notificationPanel {
+  position: absolute;
+  top: calc(100% + 10px);
+  right: 0;
+  width: min(460px, calc(100vw - 48px));
+  max-height: 70vh;
+  overflow-y: auto;
+  padding: 16px;
+  border-radius: 18px;
+  background: var(--sidebar-bg);
+  border: 1px solid var(--panel-border);
+  box-shadow: var(--surface-shadow);
+  z-index: 30;
+}
+
+.notificationPanelHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.notificationPanelHeader strong {
+  color: var(--text-bright);
+  font-size: 14px;
+}
+
+.notificationPanelHeader span {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 24px;
+  height: 24px;
+  padding: 0 8px;
+  border-radius: 999px;
+  background: var(--action-bg);
+  color: var(--accent);
+  font-size: 11px;
+}
+
+.notificationInvitationList {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.headerStat,
+.summaryCard {
+  display: flex;
+  flex-direction: column;
+  padding: 8px 14px;
+  border-radius: 12px;
+  background: var(--action-bg);
+  border: 1px solid var(--panel-border);
+  min-width: 80px;
+}
+
+.headerStat strong,
+.summaryCard strong {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--text-bright);
+}
+
+.headerStat span,
+.summaryCard span {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--muted-text);
+}
+
+.main {
+  flex: 1;
+  padding: 32px;
+  max-width: 1400px;
+}
+
+.sectionHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 18px;
+}
+
+.sectionHeader h2 {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 600;
+  color: var(--text-strong);
+}
+
+.sectionHeader > span {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 28px;
+  height: 28px;
+  padding: 0 8px;
+  border-radius: 999px;
+  background: var(--action-bg);
+  color: var(--accent);
+  font-size: 12px;
+}
+
+.sectionDescription {
+  margin: 8px 0 0;
+  max-width: 680px;
+  color: var(--muted-text);
+}
+
+.shortcutList {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.shortcutRow {
+  display: grid;
+  grid-template-columns: 1fr minmax(180px, 260px);
+  gap: 12px;
+  align-items: center;
+}
+
+.shortcutMeta {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.shortcutMeta strong {
+  color: var(--text-strong);
+  font-size: 13px;
+}
+
+.shortcutMeta span {
+  color: var(--muted-text);
+  font-size: 12px;
+}
+
+.shortcutInput {
+  width: 100%;
+  border-radius: 10px;
+  border: 1px solid var(--panel-border);
+  background: var(--card-bg);
+  color: var(--text-strong);
+  padding: 8px 10px;
+  font-size: 12px;
+}
+
+.invitationSection {
+  margin-bottom: 32px;
+}
+
+.invitationList,
+.list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.themeGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 12px;
+  max-width: 800px;
+}
+
+.invitationCard,
+.card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 8px 12px;
+  border-radius: 10px;
+  cursor: pointer;
+  background: var(--card-bg);
+  border: 1px solid var(--panel-border);
+  transition: all 0.14s ease;
+}
+
+.invitationCardCompact {
+  align-items: flex-start;
+  padding: 12px;
+}
+
+.card:hover {
+  border-color: var(--accent-soft);
+  background: var(--row-hover);
+}
+
+.invitationCardHighlight {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px var(--accent-soft);
+  animation: invitationPulse 2s ease-out forwards;
+}
+
+@keyframes invitationPulse {
+  0%, 40% { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-soft); }
+  100% { border-color: var(--panel-border); box-shadow: none; }
+}
+
+.cardBody {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  flex: 1;
+}
+
+.cardTitleRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.cardTitle {
+  color: var(--text-strong);
+  font-size: 13px;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+  flex: 1;
+}
+
+.cardActions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  flex-shrink: 0;
+}
+
+.metaRow {
+  display: flex;
+  align-items: center;
+  gap: 4px 10px;
+  flex-wrap: wrap;
+}
+
+.invitationActions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.roleBadge {
+  display: inline-flex;
+  align-items: center;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: var(--action-bg);
+  color: var(--accent-soft);
+  font-size: 10px;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.cardDate {
+  color: var(--muted-text);
+  font-size: 11px;
+}
+
+.secondaryBtn,
+.newBtn,
+.acceptBtn,
+.rejectBtn,
+.clearFiltersBtn,
+.filterChip,
+.deleteBtn,
+.miniActionBtn,
+.miniDangerBtn,
+.modalCloseBtn,
+.confirmDeleteBtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: 12px;
+  cursor: pointer;
+  transition: transform 0.14s ease, background 0.14s ease, border-color 0.14s ease, color 0.14s ease;
+  padding: 10px;
+  min-width: 40px;
+  height: 40px;
+}
+
+.secondaryBtn {
+  background: var(--action-bg);
+  color: var(--text-soft);
+}
+
+.secondaryBtn:hover:not(:disabled),
+.filterChip:hover:not(:disabled),
+.miniActionBtn:hover:not(:disabled) {
+  background: var(--action-bg-hover);
+  color: var(--text-strong);
+  transform: translateY(-1px);
+}
+
+.newBtn,
+.acceptBtn,
+.confirmDeleteBtn {
+  background: var(--accent);
+  color: var(--page-bg);
+  font-weight: 600;
+  padding: 10px 20px;
+  min-width: 120px;
+}
+
+.newBtn:hover:not(:disabled),
+.acceptBtn:hover:not(:disabled) {
+  background: var(--accent-strong);
+  transform: translateY(-1px);
+}
+
+.newBtn:disabled,
+.secondaryBtn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none !important;
+}
+
+.deleteBtn,
+.rejectBtn,
+.miniDangerBtn {
+  background: var(--danger-bg);
+  color: var(--danger);
+}
+
+/* Compact buttons inside the project card row */
+.card .secondaryBtn,
+.card .deleteBtn {
+  padding: 4px;
+  min-width: 26px;
+  height: 26px;
+  border-radius: 7px;
+}
+
+.card .secondaryBtn :global(svg),
+.card .deleteBtn :global(svg) {
+  width: 14px;
+  height: 14px;
+}
+
+.deleteBtn:hover:not(:disabled),
+.rejectBtn:hover:not(:disabled),
+.miniDangerBtn:hover:not(:disabled) {
+  background: var(--danger);
+  color: var(--on-accent);
+  transform: translateY(-1px);
+}
+
+.error {
+  margin: 14px 0;
+  padding: 12px 14px;
+  border: 1px solid var(--danger-bg);
+  border-radius: 14px;
+  background: var(--danger-bg);
+  color: var(--danger);
+  line-height: 1.5;
+}
+
+.empty,
+.emptyInline {
+  color: var(--muted-text);
+  line-height: 1.6;
+}
+
+.empty {
+  margin-top: 80px;
+  text-align: center;
+}
+
+.emptyInline {
+  margin: 14px 0 0;
+}
+
+.onboardingCard,
+.emptyStateCard,
+.sideCard {
+  margin-bottom: 24px;
+  padding: 24px;
+  border-radius: 24px;
+  background: var(--action-bg);
+  border: 1px solid var(--panel-border);
+}
+
+.settingsContainer {
+  max-width: 900px;
+  width: 100%;
+  margin: 0 auto;
+}
+
+.settingsSection {
+  padding: 32px 0;
+  border-bottom: 1px solid var(--panel-border);
+}
+
+.settingsSection:last-child {
+  border-bottom: none;
+}
+
+.settingsSection h3 {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--text-strong);
+  margin: 0 0 8px 0;
+}
+
+.settingsSection p {
+  color: var(--muted-text);
+  font-size: 14px;
+  margin: 0 0 24px 0;
+  line-height: 1.5;
+}
+
+.settingsGrid {
+  display: grid;
+  grid-template-columns: 240px 1fr;
+  gap: 32px;
+  align-items: start;
+}
+
+.settingsLabel {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text-soft);
+  padding-top: 10px;
+}
+
+.settingsControl {
+  max-width: 400px;
+}
+
+.settingsTabRow {
+  display: flex;
+  gap: 32px;
+  border-bottom: 1px solid var(--panel-border);
+  margin-bottom: 8px;
+}
+
+.settingsTab {
+  padding: 12px 0;
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid transparent;
+  color: var(--muted-text);
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.settingsTab:hover {
+  color: var(--text-strong);
+}
+
+.settingsTabActive {
+  color: var(--accent);
+  border-bottom-color: var(--accent);
+}
+
+.onboardingSteps {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+  margin-top: 18px;
+}
+
+.guideCard {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 16px;
+  border: 1px solid var(--panel-border);
+  border-radius: 18px;
+  background: var(--card-bg);
+}
+
+.guideCard strong {
+  color: var(--text-bright);
+}
+
+.guideCard span {
+  color: var(--muted-text);
+  line-height: 1.55;
+}
+
+.teamStatsGrid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  margin: 0 0 20px;
+}
+
+.teamStatCard {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 14px;
+  border-radius: 14px;
+  border: 1px solid var(--panel-border);
+  background: var(--card-bg);
+}
+
+.teamStatCard strong {
+  color: var(--text-bright);
+  font-size: 20px;
+  line-height: 1.1;
+}
+
+.teamStatCard span {
+  color: var(--muted-text);
+  font-size: 12px;
+}
+
+.workspacePicker {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 16px;
+}
+
+.workspaceChip {
+  padding: 8px 12px;
+  border: 1px solid var(--panel-border);
+  border-radius: 999px;
+  background: var(--card-bg);
+  color: var(--text-soft);
+  cursor: pointer;
+  max-width: 200px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.workspaceChipActive {
+  border-color: var(--accent);
+  background: var(--active-bg);
+  color: var(--accent);
+}
+
+.inlineForm {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-top: 16px;
+}
+
+.panelInput,
+.filterInput,
+.modalInput {
+  width: 100%;
+  padding: 12px 14px;
+  border: 1px solid var(--panel-border);
+  border-radius: 14px;
+  background: var(--page-bg);
+  color: var(--text-strong);
+}
+
+.panelInput {
+  flex: 1;
+  min-width: 220px;
+}
+
+.filterBar {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  padding: 24px;
+  border-radius: 18px;
+  background: var(--sidebar-bg);
+  border: 1px solid var(--panel-border);
+  margin-bottom: 32px;
+}
+
+.filterBarLabel {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--panel-border);
+}
+
+.filterBarTitle {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+
+.filterBarCount {
+  font-size: 11px;
+  color: var(--muted-text);
+}
+
+.filterGroup {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.filterField {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 160px;
+  color: var(--muted-text);
+  font-size: 12px;
+}
+
+.filterChips {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.filterChip {
+  height: 32px;
+  padding: 0 12px;
+  font-size: 12px;
+  border-radius: 8px;
+  background: var(--card-bg);
+  border: 1px solid var(--panel-border);
+  color: var(--text-soft);
+}
+
+.filterChipActive {
+  border-color: var(--accent);
+  background: var(--active-bg);
+  color: var(--accent);
+}
+
+.templateCard {
+  padding: 14px;
+  border-radius: 18px;
+  border: 1px solid var(--panel-border);
+  background: var(--card-bg);
+  cursor: pointer;
+  text-align: left;
+  transition: all 0.14s ease;
+}
+
+.templateCardActive {
+  border-color: var(--accent);
+  background: var(--active-bg);
+}
+
+.templateCard strong {
+  display: block;
+  color: var(--text-bright);
+  margin-bottom: 4px;
+}
+
+.templateDesc {
+  color: var(--muted-text);
+  font-size: 11px;
+}
+
+.templateCard p {
+  margin: 10px 0;
+  color: var(--text-soft);
+  line-height: 1.5;
+  font-size: 13px;
+}
+
+.modalTemplateGallery {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 12px;
+  overflow-y: auto;
+}
+
+.createModalGrid {
+  display: grid;
+  grid-template-columns: 320px 1fr;
+  gap: 24px;
+}
+
+.modalBackdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 2000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: var(--overlay-bg);
+}
+
+.modalCard {
+  width: min(600px, 100%);
+  background: var(--sidebar-bg);
+  padding: 24px;
+  border-radius: 24px;
+  border: 1px solid var(--panel-border);
+  color: var(--text-strong);
+  box-shadow: var(--surface-shadow);
+  display: flex;
+  flex-direction: column;
+}
+
+.modalHeader {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 20px;
+  align-items: center;
+}
+
+.modalActions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  margin-top: 24px;
+}
+
+@media (max-width: 1000px) {
+  .createModalGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .teamStatsGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .settingsGrid {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+
+  .settingsSection {
+    padding: 20px 0;
+  }
+
+  .header {
+    padding: 16px 20px;
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+
+  .header h1 {
+    font-size: 22px;
+  }
+
+  .main {
+    padding: 20px;
+  }
+}
+
+@media (max-width: 640px) {
+  .sidebar {
+    width: 54px;
+    padding: 14px 0;
+  }
+
+  .sidebarLogo img {
+    width: 26px;
+    height: 26px;
+  }
+
+  .header {
+    padding: 12px 14px;
+  }
+
+  .header h1 {
+    font-size: 18px;
+  }
+
+  .headerActions {
+    width: 100%;
+  }
+
+  .notificationPanel {
+    right: -6px;
+    width: min(420px, calc(100vw - 28px));
+  }
+
+  .main {
+    padding: 14px;
+  }
+
+  .settingsSection {
+    padding: 16px 0;
+  }
+
+  .settingsSection h3 {
+    font-size: 15px;
+  }
+
+  .settingsGrid {
+    gap: 8px;
+  }
+
+  .modalTemplateGallery {
+    grid-template-columns: 1fr;
+  }
+
+  .settingsControl {
+    max-width: 100%;
+  }
+
+  .modalInput {
+    width: 100%;
+    box-sizing: border-box;
+  }
+
+  .card {
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+
+  .cardBody {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .cardActions {
+    width: 100%;
+    justify-content: flex-end;
+  }
+
+  .cardTitle {
+    font-size: 14px;
+  }
+
+  .metaRow {
+    gap: 3px 8px;
+  }
+}
+
+.taskList {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 24px 0;
+}
+
+.taskCard {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 14px 16px;
+  border-radius: 10px;
+  background: var(--card-bg);
+  border: 1px solid var(--panel-border);
+  color: var(--text-strong);
+}
+
+.taskCardResolved {
+  opacity: 0.65;
+}
+
+.taskCardMeta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11px;
+  flex-wrap: wrap;
+}
+
+.taskCardProject {
+  font-weight: 600;
+  color: var(--accent-strong);
+}
+
+.taskCardFile {
+  color: var(--muted-text);
+  font-family: var(--code-font);
+}
+
+.taskCardDate {
+  color: var(--muted-text);
+}
+
+.taskBadgeOpen {
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--success-bg);
+  color: var(--success);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.taskBadgeResolved {
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--panel-border);
+  color: var(--muted-text);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.taskCardBody {
+  display: block;
+  width: 100%;
+  text-align: left;
+  background: none;
+  border: none;
+  padding: 6px 8px;
+  border-radius: 6px;
+  cursor: pointer;
+  color: inherit;
+}
+
+.taskCardBody:hover {
+  background: var(--row-hover);
+}
+
+.taskCardAuthor {
+  font-weight: 600;
+  font-size: 13px;
+}
+
+.taskCardExcerpt {
+  font-size: 12px;
+  font-style: italic;
+  color: var(--muted-text);
+}
+
+.taskCardContent {
+  margin: 4px 0 0;
+  font-size: 13px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+}
+
+.taskRepliesToggle {
+  background: none;
+  border: none;
+  padding: 0 8px;
+  font-size: 12px;
+  color: var(--muted-text);
+  cursor: pointer;
+  text-align: left;
+}
+
+.taskRepliesToggle:hover {
+  color: var(--text-strong);
+}
+
+.taskReplies {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 8px 8px 0;
+  border-left: 2px solid var(--panel-border);
+  margin-left: 8px;
+}
+
+.taskReply {
+  display: grid;
+  grid-template-columns: auto auto 1fr;
+  gap: 4px 10px;
+  align-items: baseline;
+}
+
+.taskReplyAuthor {
+  font-weight: 600;
+  font-size: 12px;
+}
+
+.taskReplyDate {
+  font-size: 11px;
+  color: var(--muted-text);
+}
+
+.taskReplyBody {
+  grid-column: 1 / -1;
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+}
+
+.taskActions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding-top: 4px;
+}
+
+.taskReplyInput {
+  flex: 1;
+  min-width: 0;
+  padding: 6px 10px;
+  border-radius: 6px;
+  border: 1px solid var(--panel-border);
+  background: var(--editor-bg);
+  color: var(--text-strong);
+  font-size: 12px;
+  resize: none;
+}
+
+.taskActionBtn {
+  padding: 5px 12px;
+  border-radius: 6px;
+  border: 1px solid var(--panel-border);
+  font-size: 12px;
+  cursor: pointer;
+  white-space: nowrap;
+  background: var(--card-bg);
+  color: var(--text-strong);
+}
+
+.taskActionBtn:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.taskActionBtnPrimary {
+  background: var(--accent-strong);
+  border-color: var(--accent-strong);
+  color: var(--on-accent);
+}
+
+.taskActionBtnSecondary {
+  background: none;
+}

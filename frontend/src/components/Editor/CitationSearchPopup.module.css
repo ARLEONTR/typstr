@@ -1,0 +1,253 @@
+.popup {
+  z-index: 9999;
+  width: 430px;
+  max-width: calc(100vw - 16px);
+  max-height: 480px;
+  display: flex;
+  flex-direction: column;
+  background: var(--sidebar-bg);
+  border: 1px solid var(--panel-border);
+  border-radius: 10px;
+  box-shadow: var(--surface-shadow);
+  overflow: hidden;
+  font-size: 13px;
+  color: var(--text-bright);
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 14px 8px;
+  border-bottom: 1px solid var(--panel-border);
+  flex-shrink: 0;
+}
+
+.headerTitle {
+  font-weight: 600;
+  font-size: 13px;
+  color: var(--text-bright);
+}
+
+.closeBtn {
+  background: none;
+  border: none;
+  color: var(--muted-text);
+  cursor: pointer;
+  font-size: 14px;
+  padding: 2px 4px;
+  line-height: 1;
+  border-radius: 4px;
+}
+.closeBtn:hover { background: var(--row-hover); }
+
+.tabs {
+  display: flex;
+  gap: 2px;
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--panel-border);
+  flex-shrink: 0;
+}
+
+.tab {
+  padding: 4px 12px;
+  border-radius: 6px;
+  border: none;
+  background: transparent;
+  color: var(--muted-text);
+  font-size: 12px;
+  cursor: pointer;
+  font-weight: 500;
+  transition: background 0.12s, color 0.12s;
+}
+.tab:hover { background: var(--row-hover); color: var(--text-bright); }
+.tabActive {
+  background: var(--action-bg);
+  color: var(--text-bright);
+}
+
+.body {
+  overflow-y: auto;
+  flex: 1;
+  min-height: 0;
+}
+
+.statusRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 20px 16px;
+  color: var(--muted-text);
+  font-size: 12px;
+}
+
+.errorRow {
+  padding: 12px 16px;
+  color: var(--danger);
+  font-size: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.warnRow {
+  padding: 6px 16px;
+  color: var(--warn);
+  font-size: 11px;
+}
+
+.rateLimitActions {
+  display: flex;
+  gap: 6px;
+}
+
+.rateLimitTab {
+  padding: 3px 10px;
+  border-radius: 5px;
+  border: 1px solid var(--panel-border);
+  background: var(--card-bg);
+  color: var(--accent);
+  font-size: 11px;
+  cursor: pointer;
+}
+.rateLimitTab:hover { background: var(--action-bg); }
+
+.spinner {
+  width: 14px;
+  height: 14px;
+  border: 2px solid var(--panel-border);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+  flex-shrink: 0;
+}
+
+@keyframes spin { to { transform: rotate(360deg); } }
+
+.list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.item {
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--panel-border);
+}
+.item:last-child { border-bottom: none; }
+
+.itemMeta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 4px;
+}
+
+.itemSource {
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  background: var(--action-bg);
+  color: var(--accent);
+  padding: 1px 6px;
+  border-radius: 4px;
+}
+
+.itemYear {
+  font-size: 11px;
+  color: var(--muted-text);
+}
+
+.itemVenue {
+  font-size: 11px;
+  color: var(--muted-text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 180px;
+}
+
+.itemCitations {
+  font-size: 10px;
+  font-weight: 500;
+  color: var(--muted-text);
+  background: var(--row-hover);
+  padding: 1px 5px;
+  border-radius: 4px;
+  white-space: nowrap;
+  margin-left: auto;
+}
+
+.itemTitle {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-bright);
+  margin: 0 0 3px;
+  line-height: 1.4;
+}
+
+.itemAuthors {
+  font-size: 11px;
+  color: var(--muted-text);
+  margin: 0 0 6px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.abstractRow {
+  margin-bottom: 6px;
+}
+
+.abstractToggle {
+  background: none;
+  border: none;
+  color: var(--accent);
+  font-size: 11px;
+  cursor: pointer;
+  padding: 0;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.abstract {
+  margin: 6px 0 0;
+  font-size: 11px;
+  line-height: 1.55;
+  color: var(--muted-text);
+  max-height: 120px;
+  overflow-y: auto;
+}
+
+.itemActions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.itemLink {
+  font-size: 11px;
+  color: var(--accent);
+  text-decoration: none;
+}
+.itemLink:hover { text-decoration: underline; }
+
+.addBtn {
+  padding: 4px 12px;
+  border-radius: 6px;
+  border: none;
+  background: var(--action-bg);
+  color: var(--text-bright);
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.12s;
+}
+.addBtn:hover:not(:disabled) { background: var(--action-bg-hover); }
+.addBtnAdded {
+  background: transparent;
+  color: var(--muted-text);
+  cursor: default;
+}

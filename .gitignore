@@ -1,0 +1,46 @@
+# Node dependencies & build artifacts
+node_modules/
+dist/
+build/
+.tsbuildinfo
+*.tsbuildinfo
+.npm
+*.log
+
+# Environment & Secret files
+.env
+.env.*
+!.env.example
+*.env
+*.local
+*.key
+*.pem
+*.pub
+deploy_key*
+*id_rsa*
+*id_ed25519*
+
+# Databases, state, and local backups
+*.db
+*.db-shm
+*.db-wal
+*.sql
+*.tar.gz
+*.zip
+backup.sql
+sqlite-data/
+postgres-data/
+.local-storage/
+
+# Operating System & IDE
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+.claude/
+
+# Temporary / Private documentation
+docs/private/
+
+.cursor/
+.gemini/
