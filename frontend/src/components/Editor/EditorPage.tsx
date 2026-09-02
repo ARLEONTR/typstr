@@ -2329,7 +2329,7 @@ function ProjectWorkspace({
     compileNow(compileTargetSource, compileContextWithActiveSource(activeSource))
   }, [activeLatexCompiler, activeSource, canRender, compileContextWithActiveSource, compileNow, compileTargetFile.id, compileTargetSource, previewMode, shouldUseTinymistWebPreview])
 
-  const TYPST_AUTO_COMPILE_DEBOUNCE_MS = 25
+  const TYPST_AUTO_COMPILE_DEBOUNCE_MS = 16
   const LATEX_AUTO_COMPILE_DEBOUNCE_MS = 600
 
   useEffect(() => {

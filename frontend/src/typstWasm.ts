@@ -193,8 +193,8 @@ export async function compileTypstWasm(
       const workspaceFilePaths = compiler._workspaceFilePaths || new Set<string>()
 
       const entryPath = normalizeVirtualPath(entryFilePath)
-      const workspaceFiles = syncWorkspaceFiles(source, entryPath, files, virtualFiles, workspaceFilePaths)
-      await preloadPackageBundles(workspaceFiles, packageBundleCache, mappedPackageRoots, resolvedPackageRoots, resolvedPackageAliases, virtualFiles)
+      const workspaceFiles = syncWorkspaceFiles(compiler, source, entryPath, files, virtualFiles, workspaceFilePaths)
+      await preloadPackageBundles(compiler, workspaceFiles, packageBundleCache, mappedPackageRoots, resolvedPackageRoots, resolvedPackageAliases, virtualFiles)
 
       const rawResult = await compiler.compile(entryPath, [], 'vector', 0)
       const vectorArtifact = normalizeVectorArtifact(rawResult)
@@ -231,8 +231,8 @@ export async function compileTypstWasmToPdf(
       const workspaceFilePaths = compiler._workspaceFilePaths || new Set<string>()
 
       const entryPath = normalizeVirtualPath(entryFilePath)
-      const workspaceFiles = syncWorkspaceFiles(source, entryPath, files, virtualFiles, workspaceFilePaths)
-      await preloadPackageBundles(workspaceFiles, packageBundleCache, mappedPackageRoots, resolvedPackageRoots, resolvedPackageAliases, virtualFiles)
+      const workspaceFiles = syncWorkspaceFiles(compiler, source, entryPath, files, virtualFiles, workspaceFilePaths)
+      await preloadPackageBundles(compiler, workspaceFiles, packageBundleCache, mappedPackageRoots, resolvedPackageRoots, resolvedPackageAliases, virtualFiles)
 
       const rawResult = await compiler.compile(entryPath, [], 'pdf', 0)
       const pdfBytes = normalizePdfArtifact(rawResult)
@@ -304,6 +304,7 @@ function packageAliasKey(spec: PackageSpec): string {
 }
 
 async function preloadPackageBundles(
+  activeCompiler: Awaited<ReturnType<TypstCompilerBuilder['build']>>,
   workspaceFiles: ProjectFileEntry[],
   packageBundleCache: Map<string, Promise<PackageBundleResponse>>,
   mappedPackageRoots: Set<string>,
@@ -341,7 +342,7 @@ async function preloadPackageBundles(
     const bundle = await getPackageBundle(spec, packageBundleCache)
     const rootPath = normalizeVirtualPath(bundle.rootPath)
     if (!mappedPackageRoots.has(rootPath)) {
-      mapPackageBundle(bundle, virtualFiles)
+      mapPackageBundle(activeCompiler, bundle, virtualFiles)
       mappedPackageRoots.add(rootPath)
     }
     resolvedPackageRoots.set(cacheKey, rootPath)
@@ -438,6 +439,7 @@ function normalizeVirtualPath(path: string): string {
 }
 
 function syncWorkspaceFiles(
+  activeCompiler: Awaited<ReturnType<TypstCompilerBuilder['build']>>,
   source: string,
   entryPath: string,
   files: ProjectFileEntry[],
@@ -453,8 +455,11 @@ function syncWorkspaceFiles(
   const normSource = normalizeTypstSourceFonts(source)
   const entryFingerprint = `text:${normSource.length}:${normSource.slice(0, 32)}:${normSource.slice(-32)}`
   if (fileContentFingerprintMap.get(normEntryPath) !== entryFingerprint || !virtualFiles.has(normEntryPath)) {
-    virtualFiles.set(normEntryPath, textEncoder.encode(normSource))
+    const encoded = textEncoder.encode(normSource)
+    virtualFiles.set(normEntryPath, encoded)
     fileContentFingerprintMap.set(normEntryPath, entryFingerprint)
+    activeCompiler.add_source(normEntryPath, normSource)
+    activeCompiler.map_shadow(normEntryPath, encoded)
   }
   workspaceFiles.push({ path: normEntryPath, content: normSource })
 
@@ -468,8 +473,11 @@ function syncWorkspaceFiles(
       const normContent = normalizeTypstSourceFonts(file.content)
       const fingerprint = `text:${normContent.length}:${normContent.slice(0, 32)}:${normContent.slice(-32)}`
       if (fileContentFingerprintMap.get(normPath) !== fingerprint || !virtualFiles.has(normPath)) {
-        virtualFiles.set(normPath, textEncoder.encode(normContent))
+        const encoded = textEncoder.encode(normContent)
+        virtualFiles.set(normPath, encoded)
         fileContentFingerprintMap.set(normPath, fingerprint)
+        activeCompiler.add_source(normPath, normContent)
+        activeCompiler.map_shadow(normPath, encoded)
       }
       workspaceFiles.push({ path: normPath, content: normContent })
     } else {
@@ -478,6 +486,7 @@ function syncWorkspaceFiles(
       if (fileContentFingerprintMap.get(normPath) !== fingerprint || !virtualFiles.has(normPath)) {
         virtualFiles.set(normPath, file.content)
         fileContentFingerprintMap.set(normPath, fingerprint)
+        activeCompiler.map_shadow(normPath, file.content)
       }
       workspaceFiles.push({ path: normPath, content: file.content })
     }
@@ -488,6 +497,7 @@ function syncWorkspaceFiles(
     if (!currentPaths.has(oldPath)) {
       virtualFiles.delete(oldPath)
       fileContentFingerprintMap.delete(oldPath)
+      activeCompiler.unmap_shadow(oldPath)
     }
   }
   workspaceFilePaths.clear()
@@ -498,7 +508,11 @@ function syncWorkspaceFiles(
   return workspaceFiles
 }
 
-function mapPackageBundle(bundle: PackageBundleResponse, virtualFiles: Map<string, Uint8Array>): void {
+function mapPackageBundle(
+  activeCompiler: Awaited<ReturnType<TypstCompilerBuilder['build']>>,
+  bundle: PackageBundleResponse,
+  virtualFiles: Map<string, Uint8Array>,
+): void {
   const rootPath = normalizeVirtualPath(bundle.rootPath)
   for (const file of bundle.files) {
     const normalizedFilePath = file.path.replace(/\\/g, '/').replace(/^\/+/, '')
@@ -510,10 +524,12 @@ function mapPackageBundle(bundle: PackageBundleResponse, virtualFiles: Map<strin
     if (virtualFiles.has(targetPath)) continue
 
     const maybeText = /\.(typ|typst)$/i.test(normalizedFilePath) ? tryDecodeBase64Text(file.contentBase64) : null
-    virtualFiles.set(
-      targetPath,
-      maybeText !== null ? textEncoder.encode(normalizeTypstSourceFonts(maybeText)) : base64ToBytes(file.contentBase64),
-    )
+    const bytes = maybeText !== null ? textEncoder.encode(normalizeTypstSourceFonts(maybeText)) : base64ToBytes(file.contentBase64)
+    virtualFiles.set(targetPath, bytes)
+    if (maybeText !== null) {
+      activeCompiler.add_source(targetPath, normalizeTypstSourceFonts(maybeText))
+    }
+    activeCompiler.map_shadow(targetPath, bytes)
   }
 }
 
