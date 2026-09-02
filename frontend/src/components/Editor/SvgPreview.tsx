@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent, type KeyboardEvent, type MouseEvent as ReactMouseEvent } from 'react'
-import DOMPurify from 'dompurify'
 import styles from './SvgPreview.module.css'
 
 /** Parse the aspect ratio (height/width) from a typst SVG string. */
@@ -271,7 +270,7 @@ export default function SvgPreview({
                   <div
                     className={styles.previewSvg}
                     onClick={(event) => handlePreviewClick(event, globalIdx + 1)}
-                    dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(pages[localIdx] ?? '', { USE_PROFILES: { svg: true, svgFilters: true } }) }}
+                    dangerouslySetInnerHTML={{ __html: pages[localIdx] ?? '' }}
                   />
                 </div>
               </div>

@@ -164,6 +164,19 @@ async function fetchFontBytes(url: string, timeoutMs = DEFAULT_FONT_FETCH_TIMEOU
   }
 }
 
+const textEncoder = new TextEncoder()
+const fileContentFingerprintMap = new Map<string, string>()
+const packageExtractCache = new Map<string, PackageSpec[]>()
+
+export function warmTypstWasmInBackground(): void {
+  void getTypstCompiler().catch(() => undefined)
+}
+
+// Auto-warm compiler in background
+if (typeof window !== 'undefined') {
+  setTimeout(() => warmTypstWasmInBackground(), 100)
+}
+
 export async function compileTypstWasm(
   source: string,
   entryFilePath: string,
@@ -178,14 +191,9 @@ export async function compileTypstWasm(
       const resolvedPackageAliases = compiler._resolvedPackageAliases || new Map<string, string>()
       const virtualFiles = compiler._virtualFiles || new Map<string, Uint8Array>()
       const workspaceFilePaths = compiler._workspaceFilePaths || new Set<string>()
-      clearWorkspaceFiles(virtualFiles, workspaceFilePaths)
-      mappedPackageRoots.clear()
-      resolvedPackageRoots.clear()
-      resolvedPackageAliases.clear()
 
       const entryPath = normalizeVirtualPath(entryFilePath)
-      const workspaceFiles = buildWorkspaceFiles(source, entryPath, files)
-      mapWorkspaceFiles(workspaceFiles, virtualFiles, workspaceFilePaths)
+      const workspaceFiles = syncWorkspaceFiles(source, entryPath, files, virtualFiles, workspaceFilePaths)
       await preloadPackageBundles(workspaceFiles, packageBundleCache, mappedPackageRoots, resolvedPackageRoots, resolvedPackageAliases, virtualFiles)
 
       const rawResult = await compiler.compile(entryPath, [], 'vector', 0)
@@ -221,14 +229,9 @@ export async function compileTypstWasmToPdf(
       const resolvedPackageAliases = compiler._resolvedPackageAliases || new Map<string, string>()
       const virtualFiles = compiler._virtualFiles || new Map<string, Uint8Array>()
       const workspaceFilePaths = compiler._workspaceFilePaths || new Set<string>()
-      clearWorkspaceFiles(virtualFiles, workspaceFilePaths)
-      mappedPackageRoots.clear()
-      resolvedPackageRoots.clear()
-      resolvedPackageAliases.clear()
 
       const entryPath = normalizeVirtualPath(entryFilePath)
-      const workspaceFiles = buildWorkspaceFiles(source, entryPath, files)
-      mapWorkspaceFiles(workspaceFiles, virtualFiles, workspaceFilePaths)
+      const workspaceFiles = syncWorkspaceFiles(source, entryPath, files, virtualFiles, workspaceFilePaths)
       await preloadPackageBundles(workspaceFiles, packageBundleCache, mappedPackageRoots, resolvedPackageRoots, resolvedPackageAliases, virtualFiles)
 
       const rawResult = await compiler.compile(entryPath, [], 'pdf', 0)
@@ -264,6 +267,8 @@ export function resetTypstWasmState(): void {
   compiler = null
   renderer = null
   isInitialized = false
+  fileContentFingerprintMap.clear()
+  packageExtractCache.clear()
 }
 
 function normalizePackageSpec(spec: PackageSpec): PackageSpec {
@@ -309,7 +314,13 @@ async function preloadPackageBundles(
   const pending = new Map<string, PackageSpec>()
   for (const file of workspaceFiles) {
     if (typeof file.content !== 'string') continue
-    for (const spec of extractPackageSpecs(file.content)) {
+    const fingerprint = fileContentFingerprintMap.get(file.path) || file.path
+    let specs = packageExtractCache.get(fingerprint)
+    if (!specs) {
+      specs = extractPackageSpecs(file.content)
+      packageExtractCache.set(fingerprint, specs)
+    }
+    for (const spec of specs) {
       pending.set(packageCacheKey(spec), spec)
     }
   }
@@ -426,35 +437,65 @@ function normalizeVirtualPath(path: string): string {
   return normalized.startsWith('/') ? normalized : `/${normalized}`
 }
 
-function buildWorkspaceFiles(
+function syncWorkspaceFiles(
   source: string,
   entryPath: string,
   files: ProjectFileEntry[],
+  virtualFiles: Map<string, Uint8Array>,
+  workspaceFilePaths: Set<string>,
 ): ProjectFileEntry[] {
-  const byPath = new Map<string, ProjectFileEntry>()
+  const currentPaths = new Set<string>()
+  const workspaceFiles: ProjectFileEntry[] = []
+
+  // 1. Process entry file
+  const normEntryPath = normalizeVirtualPath(entryPath)
+  currentPaths.add(normEntryPath)
+  const normSource = normalizeTypstSourceFonts(source)
+  const entryFingerprint = `text:${normSource.length}:${normSource.slice(0, 32)}:${normSource.slice(-32)}`
+  if (fileContentFingerprintMap.get(normEntryPath) !== entryFingerprint || !virtualFiles.has(normEntryPath)) {
+    virtualFiles.set(normEntryPath, textEncoder.encode(normSource))
+    fileContentFingerprintMap.set(normEntryPath, entryFingerprint)
+  }
+  workspaceFiles.push({ path: normEntryPath, content: normSource })
+
+  // 2. Process other project files
   for (const file of files) {
-    byPath.set(normalizeVirtualPath(file.path), {
-      path: normalizeVirtualPath(file.path),
-      content: typeof file.content === 'string' ? normalizeTypstSourceFonts(file.content) : file.content,
-    })
+    const normPath = normalizeVirtualPath(file.path)
+    if (normPath === normEntryPath) continue
+    currentPaths.add(normPath)
+
+    if (typeof file.content === 'string') {
+      const normContent = normalizeTypstSourceFonts(file.content)
+      const fingerprint = `text:${normContent.length}:${normContent.slice(0, 32)}:${normContent.slice(-32)}`
+      if (fileContentFingerprintMap.get(normPath) !== fingerprint || !virtualFiles.has(normPath)) {
+        virtualFiles.set(normPath, textEncoder.encode(normContent))
+        fileContentFingerprintMap.set(normPath, fingerprint)
+      }
+      workspaceFiles.push({ path: normPath, content: normContent })
+    } else {
+      const byteLen = file.content.byteLength
+      const fingerprint = `bin:${byteLen}:${file.content[0] ?? 0}:${file.content[byteLen - 1] ?? 0}`
+      if (fileContentFingerprintMap.get(normPath) !== fingerprint || !virtualFiles.has(normPath)) {
+        virtualFiles.set(normPath, file.content)
+        fileContentFingerprintMap.set(normPath, fingerprint)
+      }
+      workspaceFiles.push({ path: normPath, content: file.content })
+    }
   }
 
-  byPath.set(entryPath, {
-    path: entryPath,
-    content: normalizeTypstSourceFonts(source),
-  })
-
-  return [...byPath.values()]
-}
-
-function mapWorkspaceFiles(files: ProjectFileEntry[], virtualFiles: Map<string, Uint8Array>, workspaceFilePaths: Set<string>): void {
-  const encoder = new TextEncoder()
+  // 3. Remove deleted workspace files (preserve package files in /typst/packages/)
+  for (const oldPath of workspaceFilePaths) {
+    if (!currentPaths.has(oldPath)) {
+      virtualFiles.delete(oldPath)
+      fileContentFingerprintMap.delete(oldPath)
+    }
+  }
   workspaceFilePaths.clear()
-  for (const file of files) {
-    const path = normalizeVirtualPath(file.path)
-    virtualFiles.set(path, typeof file.content === 'string' ? encoder.encode(file.content) : file.content)
+  for (const path of currentPaths) {
     workspaceFilePaths.add(path)
   }
+
+  return workspaceFiles
 }
 
 function mapPackageBundle(bundle: PackageBundleResponse, virtualFiles: Map<string, Uint8Array>): void {
@@ -466,25 +507,23 @@ function mapPackageBundle(bundle: PackageBundleResponse, virtualFiles: Map<strin
       throw new Error(`Invalid Typst package file path after normalization: ${file.path}`)
     }
 
+    if (virtualFiles.has(targetPath)) continue
+
     const maybeText = /\.(typ|typst)$/i.test(normalizedFilePath) ? tryDecodeBase64Text(file.contentBase64) : null
     virtualFiles.set(
       targetPath,
-      maybeText !== null ? new TextEncoder().encode(normalizeTypstSourceFonts(maybeText)) : base64ToBytes(file.contentBase64),
+      maybeText !== null ? textEncoder.encode(normalizeTypstSourceFonts(maybeText)) : base64ToBytes(file.contentBase64),
     )
   }
 }
 
 function normalizeTypstSourceFonts(content: string): string {
+  if (!content.includes('tex gyre') && !content.includes('TeX Gyre') && !content.includes('TEX GYRE')) {
+    return content
+  }
   return content
     .replace(/tex gyre termes/gi, 'Libertinus Serif')
     .replace(/tex gyre cursor/gi, 'DejaVu Sans Mono')
-}
-
-function clearWorkspaceFiles(virtualFiles: Map<string, Uint8Array>, workspaceFilePaths: Set<string>): void {
-  for (const path of workspaceFilePaths) {
-    virtualFiles.delete(path)
-  }
-  workspaceFilePaths.clear()
 }
 
 function normalizeSvgPages(result: unknown): string[] {
