@@ -620,6 +620,16 @@ function ProjectWorkspace({
   const [projectSearchError, setProjectSearchError] = useState<string | null>(null)
   const [openTabFileIds, setOpenTabFileIds] = useState<string[]>([activeFile.id])
   const [cursorLocation, setCursorLocation] = useState({ line: 1, column: 1 })
+  const cursorLocationDebounceTimerRef = useRef<number | null>(null)
+  const handleCursorLocationChange = useCallback((loc: { line: number; column: number }) => {
+    if (cursorLocationDebounceTimerRef.current !== null) {
+      window.clearTimeout(cursorLocationDebounceTimerRef.current)
+    }
+    cursorLocationDebounceTimerRef.current = window.setTimeout(() => {
+      cursorLocationDebounceTimerRef.current = null
+      setCursorLocation(loc)
+    }, 120)
+  }, [])
   const [goToLineValue, setGoToLineValue] = useState('1')
   const [goToColumnValue, setGoToColumnValue] = useState('1')
   const [shortcutBindings, setShortcutBindings] = useState<ShortcutBindings>(DEFAULT_SHORTCUT_BINDINGS)
@@ -826,15 +836,29 @@ function ProjectWorkspace({
     return null
   }, [isConvertingProjectFormat, isCreatingCheckpoint, isExporting, isSavingToDrive, restoringRevisionId])
 
+  const editorSourceDebounceTimerRef = useRef<number | null>(null)
+  const typstLiveCompileTimerRef = useRef<number | null>(null)
+  const activeEditorSourceRef = useRef<string>(isEditableTextFile(activeFile) ? ytext.toString() : '')
   const [activeEditorSource, setActiveEditorSource] = useState(() => isEditableTextFile(activeFile) ? ytext.toString() : '')
+
   useEffect(() => {
-    setActiveEditorSource(isEditableTextFile(activeFile) ? (ytext.toString() || projectSearchIndex[activeFile.id] || '') : '')
+    const initial = isEditableTextFile(activeFile) ? (ytext.toString() || projectSearchIndex[activeFile.id] || '') : ''
+    activeEditorSourceRef.current = initial
+    setActiveEditorSource(initial)
   }, [activeFile.id, activeFile.mimeType, projectSearchIndex, synced, ytext])
 
   useEffect(() => {
     const handleYtextChange = () => {
       if (isEditableTextFile(activeFile)) {
-        setActiveEditorSource(ytext.toString())
+        const text = ytext.toString()
+        activeEditorSourceRef.current = text
+        if (editorSourceDebounceTimerRef.current !== null) {
+          window.clearTimeout(editorSourceDebounceTimerRef.current)
+        }
+        editorSourceDebounceTimerRef.current = window.setTimeout(() => {
+          editorSourceDebounceTimerRef.current = null
+          setActiveEditorSource(text)
+        }, 300)
       }
     }
     ytext.observe(handleYtextChange)
@@ -4671,7 +4695,27 @@ function ProjectWorkspace({
   }, [activeFile, canEdit, createSuggestionForRange, trackChangesEnabled])
 
   const handleEditorChange = useCallback((source: string) => {
-    setActiveEditorSource(source)
+    activeEditorSourceRef.current = source
+
+    // 1. Live real-time Typst WASM compilation (16ms) directly from the source buffer
+    if (activeIsRenderableTypstFile && previewMode === 'svg') {
+      if (typstLiveCompileTimerRef.current !== null) {
+        window.clearTimeout(typstLiveCompileTimerRef.current)
+      }
+      typstLiveCompileTimerRef.current = window.setTimeout(() => {
+        typstLiveCompileTimerRef.current = null
+        compileNow(source, compileContextWithActiveSource(source))
+      }, 16)
+    }
+
+    // 2. Debounce updating the heavy EditorPage React state (minimap, outline, bibtex, lsp)
+    if (editorSourceDebounceTimerRef.current !== null) {
+      window.clearTimeout(editorSourceDebounceTimerRef.current)
+    }
+    editorSourceDebounceTimerRef.current = window.setTimeout(() => {
+      editorSourceDebounceTimerRef.current = null
+      setActiveEditorSource(source)
+    }, 250)
 
     if (!canEdit || !isEditableTextFile(activeFile) || !isOnline || !source.trim()) {
       return
@@ -4714,7 +4758,7 @@ function ProjectWorkspace({
         })
         .catch(() => undefined)
     }, 350)
-  }, [activeFile, canEdit, clearMutationNotice, isOnline, project.id])
+  }, [activeFile, activeIsRenderableTypstFile, canEdit, clearMutationNotice, compileContextWithActiveSource, compileNow, isOnline, previewMode, project.id])
 
   const handleSuggestionDecision = useCallback(async (suggestionId: string, action: 'accept' | 'reject') => {
     try {
@@ -6742,7 +6786,7 @@ function ProjectWorkspace({
                           formatRequest={formatRequest}
                           revealLocation={revealLocation}
                           searchPanelRequest={searchPanelRequest}
-                          onCursorLocationChange={setCursorLocation}
+                          onCursorLocationChange={handleCursorLocationChange}
                           comments={activeComments}
                           highlightedCommentId={highlightedCommentId}
                           aiEditSuggestions={activePendingAiEdits}
