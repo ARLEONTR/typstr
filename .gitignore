@@ -6,6 +6,11 @@ build/
 *.tsbuildinfo
 .npm
 *.log
+*.tmp
+*.temp
+*.bak
+*.swp
+*~
 
 # Environment & Secret files
 .env
@@ -19,6 +24,10 @@ build/
 deploy_key*
 *id_rsa*
 *id_ed25519*
+client_secret*.json
+credentials*.json
+service-account*.json
+.secrets/
 
 # Databases, state, and local backups
 *.db
@@ -38,9 +47,8 @@ Thumbs.db
 .vscode/
 .idea/
 .claude/
+.cursor/
+.gemini/
 
 # Temporary / Private documentation
 docs/private/
-
-.cursor/
-.gemini/
