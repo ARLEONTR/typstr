@@ -7,6 +7,8 @@
 
 **Typstr** is an open-source, browser-based collaborative technical writing workspace for **Typst**, **LaTeX**, and markdown documents. It brings together real-time collaborative editing, instant WASM and server-side compilation, live preview synchronization, academic reference workflows, enterprise LDAP / Active Directory authentication, and revision recovery.
 
+> 🌐 **Cloud Access:** Looking to use Typstr directly without self-hosting? Access the managed cloud version at **[https://typs.tr](https://typs.tr)**.
+
 ---
 
 ## Key Features
