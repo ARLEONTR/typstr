@@ -2315,14 +2315,16 @@ function ProjectWorkspace({
     compileNow(compileTargetSource, compileContextWithActiveSource(activeSource))
   }, [activeLatexCompiler, activeSource, canRender, compileContextWithActiveSource, compileNow, compileTargetFile.id, compileTargetSource, previewMode, shouldUseTinymistWebPreview])
 
-  const AUTO_COMPILE_DEBOUNCE_MS = 800
+  const TYPST_AUTO_COMPILE_DEBOUNCE_MS = 50
+  const LATEX_AUTO_COMPILE_DEBOUNCE_MS = 600
+
   useEffect(() => {
     if (!ENABLE_AUTO_COMPILE) return
     if (!ENABLE_TINYMIST_PREVIEW || !activeIsRenderableTypstFile || previewMode !== 'svg') return
     if (!compileTargetSource.trim()) return
     const id = window.setTimeout(() => {
       setTinymistSyncSource((current) => current === compileTargetSource ? current : compileTargetSource)
-    }, AUTO_COMPILE_DEBOUNCE_MS)
+    }, TYPST_AUTO_COMPILE_DEBOUNCE_MS)
     return () => window.clearTimeout(id)
   }, [activeIsRenderableTypstFile, compileTargetSource, previewMode])
 
@@ -2333,7 +2335,7 @@ function ProjectWorkspace({
     if (!compileTargetSource.trim()) return
     const id = window.setTimeout(() => {
       compileNow(compileTargetSource, compileContextWithActiveSource(activeSource))
-    }, AUTO_COMPILE_DEBOUNCE_MS)
+    }, TYPST_AUTO_COMPILE_DEBOUNCE_MS)
     return () => window.clearTimeout(id)
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeSource, canRender, canRenderLatex, compileContextWithActiveSource, compileNow, compileTargetSource, previewMode, shouldUseTinymistWebPreview])
@@ -2373,7 +2375,7 @@ function ProjectWorkspace({
     if (compileTargetSource === latexInitialSourceRef.current) return
     const id = window.setTimeout(() => {
       compileNow(compileTargetSource, compileContextWithActiveSource(activeSource))
-    }, AUTO_COMPILE_DEBOUNCE_MS)
+    }, LATEX_AUTO_COMPILE_DEBOUNCE_MS)
     return () => window.clearTimeout(id)
   }, [activeSource, canRenderLatex, compileContextWithActiveSource, compileNow, compileTargetFile.id, compileTargetSource])
 

@@ -547,13 +547,15 @@ function normalizeSvgPages(result: unknown): string[] {
   return page ? [page] : []
 }
 
+const textDecoder = new TextDecoder('utf-8')
+
 function stringifySvgPage(page: unknown): string {
   if (typeof page === 'string') {
     return page
   }
 
   if (page instanceof Uint8Array) {
-    return new TextDecoder().decode(page)
+    return textDecoder.decode(page)
   }
 
   if (typeof page === 'object' && page !== null && 'content' in page) {
