@@ -873,7 +873,20 @@ export default function CodeMirrorEditor({
           }}
         />
       )}
-      <div ref={containerRef} style={{ height: '100%', overflow: 'hidden' }} />
+      <div
+        ref={containerRef}
+        style={{ height: '100%', overflow: 'hidden' }}
+        onKeyDown={(e) => {
+          if ((e.ctrlKey || e.metaKey) && ['s', 'enter', 'g', 'p', 'f', 'b', 'o', 'e'].includes(e.key.toLowerCase())) {
+            return
+          }
+          e.stopPropagation()
+        }}
+        onInput={(e) => e.stopPropagation()}
+        onMouseDown={(e) => {
+          e.stopPropagation()
+        }}
+      />
 
       {hoverTooltipState ? (
         <EditorAssistTooltip tooltip={hoverTooltipState} />

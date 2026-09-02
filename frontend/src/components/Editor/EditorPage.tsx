@@ -628,7 +628,7 @@ function ProjectWorkspace({
     cursorLocationDebounceTimerRef.current = window.setTimeout(() => {
       cursorLocationDebounceTimerRef.current = null
       setCursorLocation(loc)
-    }, 120)
+    }, 400)
   }, [])
   const [goToLineValue, setGoToLineValue] = useState('1')
   const [goToColumnValue, setGoToColumnValue] = useState('1')
@@ -858,7 +858,7 @@ function ProjectWorkspace({
         editorSourceDebounceTimerRef.current = window.setTimeout(() => {
           editorSourceDebounceTimerRef.current = null
           setActiveEditorSource(text)
-        }, 300)
+        }, 1500)
       }
     }
     ytext.observe(handleYtextChange)
@@ -4747,7 +4747,7 @@ function ProjectWorkspace({
     editorSourceDebounceTimerRef.current = window.setTimeout(() => {
       editorSourceDebounceTimerRef.current = null
       setActiveEditorSource(source)
-    }, 250)
+    }, 1500)
 
     if (!canEdit || !isEditableTextFile(activeFile) || !isOnline || !source.trim()) {
       return

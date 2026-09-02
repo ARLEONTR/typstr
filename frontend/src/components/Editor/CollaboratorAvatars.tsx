@@ -42,12 +42,20 @@ export default function CollaboratorAvatars({ awareness, isGeminiEnabled = false
   const [states, setStates] = useState<Map<number, AwarenessState>>(new Map())
 
   useEffect(() => {
+    let timer: number | null = null
     const update = () => {
       setStates(new Map(awareness.getStates() as Map<number, AwarenessState>))
     }
+    const debouncedUpdate = () => {
+      if (timer !== null) window.clearTimeout(timer)
+      timer = window.setTimeout(update, 300)
+    }
     update()
-    awareness.on('change', update)
-    return () => awareness.off('change', update)
+    awareness.on('change', debouncedUpdate)
+    return () => {
+      if (timer !== null) window.clearTimeout(timer)
+      awareness.off('change', debouncedUpdate)
+    }
   }, [awareness])
 
   const awarenessPeers = Array.from(states.entries()).filter(([id]) => id !== awareness.clientID)
