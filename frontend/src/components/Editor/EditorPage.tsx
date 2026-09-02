@@ -1541,6 +1541,8 @@ function ProjectWorkspace({
   }, [activeFile.id])
 
   useEffect(() => {
+    let timer: number | null = null
+
     const updateCollaborators = () => {
       const entries: CollaboratorPresence[] = []
       awareness.getStates().forEach((value, clientId) => {
@@ -1561,13 +1563,29 @@ function ProjectWorkspace({
         })
       })
 
-      setCollaborators(entries)
+      setCollaborators((prev) => {
+        if (prev.length === 0 && entries.length === 0) return prev
+        if (prev.length === entries.length) {
+          const isSame = prev.every((p, i) => {
+            const e = entries[i]
+            return p.clientId === e.clientId && p.line === e.line && p.column === e.column && p.filePath === e.filePath && p.userName === e.userName
+          })
+          if (isSame) return prev
+        }
+        return entries
+      })
+    }
+
+    const debouncedUpdate = () => {
+      if (timer !== null) window.clearTimeout(timer)
+      timer = window.setTimeout(updateCollaborators, 200)
     }
 
     updateCollaborators()
-    awareness.on('change', updateCollaborators)
+    awareness.on('change', debouncedUpdate)
     return () => {
-      awareness.off('change', updateCollaborators)
+      if (timer !== null) window.clearTimeout(timer)
+      awareness.off('change', debouncedUpdate)
     }
   }, [awareness])
 
@@ -4406,7 +4424,21 @@ function ProjectWorkspace({
   }, [onSelectFile, revealEditorLocation])
 
   const handleSelectionRangeChange = useCallback((selection: CommentSelectionAnchor | null) => {
-    setCommentSelection(selection)
+    setCommentSelection((prev) => {
+      if (prev === null && selection === null) return prev
+      if (
+        prev
+        && selection
+        && prev.startLine === selection.startLine
+        && prev.startColumn === selection.startColumn
+        && prev.endLine === selection.endLine
+        && prev.endColumn === selection.endColumn
+        && prev.excerpt === selection.excerpt
+      ) {
+        return prev
+      }
+      return selection
+    })
   }, [])
 
   const handleStartCommentFromSelection = useCallback((selection: CommentSelectionAnchor) => {

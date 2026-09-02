@@ -251,6 +251,7 @@ export default function CodeMirrorEditor({
   const gemini = useGemini()
   const suggestionTimeoutRef = useRef<any>(null)
   const hoverTooltipFrameRef = useRef<number | null>(null)
+  const awarenessCursorTimerRef = useRef<number | null>(null)
 
   useEffect(() => { isCoAuthorEnabledRef.current = isCoAuthorEnabled }, [isCoAuthorEnabled])
   useEffect(() => { onCompileRef.current = onCompile }, [onCompile])
@@ -623,11 +624,17 @@ export default function CodeMirrorEditor({
           if (update.docChanged || update.selectionSet) {
             const head = update.state.selection.main.head
             const line = update.state.doc.lineAt(head)
-            awareness.setLocalStateField('typstrCursor', {
-              filePath: currentFilePathRef.current ?? null,
-              line: line.number,
-              column: head - line.from + 1,
-            })
+            if (awarenessCursorTimerRef.current !== null) {
+              window.clearTimeout(awarenessCursorTimerRef.current)
+            }
+            awarenessCursorTimerRef.current = window.setTimeout(() => {
+              awarenessCursorTimerRef.current = null
+              awareness.setLocalStateField('typstrCursor', {
+                filePath: currentFilePathRef.current ?? null,
+                line: line.number,
+                column: head - line.from + 1,
+              })
+            }, 150)
             onCursorLocationChangeRef.current?.({
               line: line.number,
               column: head - line.from + 1,
