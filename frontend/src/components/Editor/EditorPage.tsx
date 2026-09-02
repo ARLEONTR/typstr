@@ -3671,6 +3671,22 @@ function ProjectWorkspace({
     setTinymistContextMenu(null)
   }, [activeFile.id, openTinymistComment, projectSearchIndex, ytext])
 
+  const handleSvgTextClick = useCallback(({ text }: { page: number; text: string }) => {
+    if (!text) return
+    const currentSource = activeFile.id === compileTargetFile.id ? ytext.toString() : (projectSearchIndex[activeFile.id] ?? '')
+    if (!currentSource) return
+
+    const searchSnippet = text.slice(0, 40).trim()
+    const index = currentSource.indexOf(searchSnippet)
+    if (index !== -1) {
+      const upTo = currentSource.slice(0, index)
+      const lines = upTo.split('\n')
+      const line = lines.length
+      const column = (lines[lines.length - 1]?.length ?? 0) + 1
+      setRevealLocation({ line, column, nonce: Date.now() })
+    }
+  }, [activeFile.id, compileTargetFile.id, projectSearchIndex, ytext])
+
   // Editor → Preview: tinymist panelScrollTo expects { line, character } (0-based).
   const tinymistCursorPosition = useMemo(() => {
     if (!prefersTinymistPreview) return null
@@ -6879,6 +6895,7 @@ function ProjectWorkspace({
                           pageOffset={pageOffset}
                           compileError={visibleCompileError}
                           isCompiling={isCompiling}
+                          onTextClick={handleSvgTextClick}
                         />
                       </Suspense>
                     ) : (
