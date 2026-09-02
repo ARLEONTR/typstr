@@ -42,12 +42,11 @@ let renderer: TypstRenderer | null = null
 let compileChain: Promise<unknown> = Promise.resolve()
 const DEFAULT_FONT_FETCH_TIMEOUT_MS = Number(import.meta.env.VITE_TYPST_FONT_FETCH_TIMEOUT_MS ?? 3500) || 3500
 
-const DEFAULT_FONT_URLS = [
+const BUNDLED_FONT_URLS = [
   liberationSansRegularUrl,
   liberationSansBoldUrl,
   liberationSansItalicUrl,
   liberationSansBoldItalicUrl,
-  ...buildTypstTextFontUrls(),
 ]
 
 function buildTypstTextFontUrls(): string[] {
@@ -122,28 +121,38 @@ export async function getTypstCompiler() {
 }
 
 async function loadDefaultFonts(builder: TypstCompilerBuilder): Promise<void> {
-  const settledBuffers = await Promise.allSettled(
-    DEFAULT_FONT_URLS.map((url) => fetchFontBytes(url)),
+  // 1. First load local bundled fonts (guaranteed to succeed offline)
+  const bundledBuffers = await Promise.allSettled(
+    BUNDLED_FONT_URLS.map((url) => fetchFontBytes(url, 5000)),
   )
-
-  const buffers: Uint8Array[] = []
-  for (const result of settledBuffers) {
+  let loadedCount = 0
+  for (const result of bundledBuffers) {
     if (result.status === 'fulfilled') {
-      buffers.push(result.value)
+      await builder.add_raw_font(result.value)
+      loadedCount++
     }
   }
 
-  if (buffers.length === 0) {
-    throw new Error('No Typst WebAssembly fonts were loaded.')
+  // 2. Best-effort load additional typography fonts from CDN with a short timeout
+  const cdnUrls = buildTypstTextFontUrls()
+  const cdnBuffers = await Promise.allSettled(
+    cdnUrls.map((url) => fetchFontBytes(url, 2000)),
+  )
+  for (const result of cdnBuffers) {
+    if (result.status === 'fulfilled') {
+      await builder.add_raw_font(result.value)
+      loadedCount++
+    }
   }
-  for (const buf of buffers) {
-    await builder.add_raw_font(buf)
+
+  if (loadedCount === 0) {
+    throw new Error('No Typst WebAssembly fonts were loaded.')
   }
 }
 
-async function fetchFontBytes(url: string): Promise<Uint8Array> {
+async function fetchFontBytes(url: string, timeoutMs = DEFAULT_FONT_FETCH_TIMEOUT_MS): Promise<Uint8Array> {
   const controller = new AbortController()
-  const timeout = window.setTimeout(() => controller.abort(), DEFAULT_FONT_FETCH_TIMEOUT_MS)
+  const timeout = window.setTimeout(() => controller.abort(), timeoutMs)
   try {
     const response = await fetch(url, { cache: 'force-cache', signal: controller.signal })
     if (!response.ok) {

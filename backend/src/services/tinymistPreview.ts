@@ -1,9 +1,10 @@
 import { spawn } from 'node:child_process'
 import { createHash } from 'node:crypto'
 import { existsSync, rmSync } from 'node:fs'
-import net from 'node:net'
 import type { IncomingMessage } from 'node:http'
+import net from 'node:net'
 import type { Request, Response } from 'express'
+import { env } from '../env.js'
 import type { ProjectWorkspace } from './projectWorkspace.js'
 import { createMirroredWorkspace, resolveWorkspacePath, syncMirroredWorkspace } from './workspaceMirror.js'
 
@@ -202,7 +203,14 @@ export async function ensureTypstPreviewSession(input: {
       throw e;
     }
   } else {
-    session.entryPath = input.workspace.entryPath
+    if (session.entryPath !== input.workspace.entryPath) {
+      session.entryPath = input.workspace.entryPath
+      session.ready = false
+      if (session.process) {
+        session.process.kill('SIGTERM')
+        session.process = null
+      }
+    }
     session.lastTouchedAt = Date.now()
     if (session.workspaceHash !== nextWorkspaceHash) {
       syncMirroredWorkspace(session.workspaceDir, input.workspace.files)
@@ -292,7 +300,8 @@ export async function ensureTypstPreviewSession(input: {
 function buildTinymistChildEnv(): NodeJS.ProcessEnv {
   const childEnv: NodeJS.ProcessEnv = {
     ...process.env,
-    HOME: process.env.HOME ?? '/tmp',
+    HOME: process.env.HOME ?? '/home/node',
+    TYPST_FONT_PATHS: process.env.TYPST_FONT_PATHS ?? '/usr/share/fonts:/usr/local/share/fonts',
   }
   delete childEnv.PORT
   return childEnv
@@ -352,9 +361,27 @@ export async function proxyTypstPreviewRequest(req: Request, res: Response): Pro
   // Clear restrictive headers and set a comprehensive CSP to allow preview functionality and framing.
   res.removeHeader('Content-Security-Policy')
   res.removeHeader('X-Frame-Options')
+
+  const originHeader = req.headers.origin || req.headers.referer
+  let allowedOrigin = ''
+  if (originHeader) {
+    try {
+      const parsed = new URL(Array.isArray(originHeader) ? originHeader[0] : originHeader)
+      allowedOrigin = `${parsed.protocol}//${parsed.host}`
+    } catch { /* ignore */ }
+  }
+
+  const frameAncestors = ["'self'", 'http://localhost:*', 'http://127.0.0.1:*', 'https://*']
+  if (allowedOrigin && !frameAncestors.includes(allowedOrigin)) {
+    frameAncestors.push(allowedOrigin)
+  }
+  if (env.frontendOrigin && !frameAncestors.includes(env.frontendOrigin)) {
+    frameAncestors.push(env.frontendOrigin)
+  }
+
   res.setHeader(
     'Content-Security-Policy',
-    "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' data: blob:; connect-src 'self' ws: wss: data: blob:; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; frame-ancestors 'self' http://localhost:8989 http://localhost:5173 http://localhost:3000;"
+    `default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' data: blob:; connect-src 'self' ws: wss: data: blob:; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data: blob:; frame-ancestors ${frameAncestors.join(' ')};`
   )
 
   res.status(response.status)
@@ -443,14 +470,30 @@ export async function proxyTypstPreviewWebSocket(req: IncomingMessage, socket: n
 
   proxySocket.on('connect', () => {
     console.log('[Tinymist Preview] Proxy connected to target port:', targetPort, 'for sessionId:', sessionId);
-    const headerLines = Object.entries(req.headers).filter(([key]) => !['host', 'origin'].includes(key.toLowerCase())).map(([key, val]) => key + ': ' + val)
+    const headerLines = Object.entries(req.headers)
+      .filter(([key]) => !['host', 'origin'].includes(key.toLowerCase()))
+      .map(([key, val]) => `${key}: ${Array.isArray(val) ? val.join(', ') : val}`)
     proxySocket.write('GET / HTTP/1.1\r\nhost: 127.0.0.1:' + targetPort + '\r\norigin: http://127.0.0.1:' + targetPort + '\r\n' + headerLines.join('\r\n') + '\r\n\r\n')
     if (head.length > 0) proxySocket.write(head)
     socket.pipe(proxySocket).pipe(socket)
   });
+
   proxySocket.on('error', (err) => {
     console.error('[Tinymist Preview] Proxy socket error:', err, 'for sessionId:', sessionId);
     sendUpgradeErrorResponse(socket, 502, 'Tinymist preview websocket target unavailable.')
+    socket.destroy()
+  });
+
+  socket.on('error', () => {
+    proxySocket.destroy()
+  });
+
+  proxySocket.on('close', () => {
+    socket.destroy()
+  });
+
+  socket.on('close', () => {
+    proxySocket.destroy()
   });
 }
 

@@ -3617,10 +3617,13 @@ function ProjectWorkspace({
   const handleTinymistJump = useCallback((jump: TinymistJumpEvent) => {
     const workspaceDir = typstPreviewSession?.workspaceDir
     let targetFile = compileTargetFile
-    if (workspaceDir && jump.filepath) {
-      const rel = jump.filepath.startsWith(workspaceDir)
-        ? jump.filepath.slice(workspaceDir.length).replace(/^[\\/]+/, '')
-        : null
+    if (jump.filepath) {
+      let rel: string | null = null
+      if (workspaceDir && jump.filepath.startsWith(workspaceDir)) {
+        rel = jump.filepath.slice(workspaceDir.length).replace(/^[\\/]+/, '')
+      } else if (!jump.filepath.startsWith('/') && !jump.filepath.startsWith('\\') && !jump.filepath.includes(':')) {
+        rel = jump.filepath.replace(/^(\.\/)+/, '')
+      }
       if (rel) {
         const resolvedTargetFile = project.files.find((f) => f.path === rel || f.path.replace(/\\/g, '/') === rel.replace(/\\/g, '/'))
         if (resolvedTargetFile && resolvedTargetFile.mimeType !== DRIVE_FOLDER_MIME_TYPE) {
