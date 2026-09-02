@@ -57,7 +57,9 @@ import {
   listCommentsInvolvingUser,
   listProjectCommentsInvolvingUser,
   getSearchableFilesForUser,
+  getProjectFileStorage,
 } from '../db.js'
+import { applySourceToCollaborationState } from '../collaboration.js'
 import { getAuthenticatedUser } from '../auth.js'
 import { createCollaborationToken } from '../services/collaborationToken.js'
 import { emitSharingUpdate, subscribeToSharingUpdates } from '../services/sharingEvents.js'
@@ -674,9 +676,8 @@ projectsRouter.post('/:projectId/convert', async (req, res, next) => {
         driveFileId,
       })
 
-      const document = new Y.Doc()
-      document.getText('content').insert(0, converted)
-      await updateProjectFileCollaborationState(createdFile.id, Y.encodeStateAsUpdate(document))
+      const createdState = applySourceToCollaborationState(null, converted)
+      await updateProjectFileCollaborationState(createdFile.id, createdState)
 
       invalidateProjectWorkspaceFile(projectId, createdFile.id)
       await logProjectActivity({
@@ -707,9 +708,9 @@ projectsRouter.post('/:projectId/convert', async (req, res, next) => {
     }
     await touchProjectFile(sourceFile.id)
 
-    const document = new Y.Doc()
-    document.getText('content').insert(0, converted)
-    await updateProjectFileCollaborationState(sourceFile.id, Y.encodeStateAsUpdate(document))
+    const sourceStorage = await getProjectFileStorage(sourceFile.id)
+    const updatedState = applySourceToCollaborationState(sourceStorage?.collaborationState ?? null, converted)
+    await updateProjectFileCollaborationState(sourceFile.id, updatedState)
 
     invalidateProjectWorkspaceFile(projectId, sourceFile.id)
     await logProjectActivity({
@@ -3605,9 +3606,9 @@ projectsRouter.post('/:projectId/files/:fileId/autosave', async (req, res, next)
     }
 
     await writeTextFileToDrive(file.ownerUserId, file.driveFileId, source)
-    const collaborationDocument = new Y.Doc()
-    collaborationDocument.getText('content').insert(0, source)
-    await updateProjectFileCollaborationState(file.id, Y.encodeStateAsUpdate(collaborationDocument))
+    const storage = await getProjectFileStorage(file.id)
+    const updatedState = applySourceToCollaborationState(storage?.collaborationState ?? null, source)
+    await updateProjectFileCollaborationState(file.id, updatedState)
     await touchProjectFile(file.id)
     invalidateProjectWorkspaceFile(file.projectId, file.id)
 
@@ -4205,9 +4206,9 @@ async function initializeProjectMainFileFormat(input: {
   }
   await touchProjectFile(file.id)
 
-  const document = new Y.Doc()
-  document.getText('content').insert(0, nextContent)
-  await updateProjectFileCollaborationState(file.id, Y.encodeStateAsUpdate(document))
+  const fileStorage = await getProjectFileStorage(file.id)
+  const updatedState = applySourceToCollaborationState(fileStorage?.collaborationState ?? null, nextContent)
+  await updateProjectFileCollaborationState(file.id, updatedState)
 
   if (input.format === 'latex') {
     await upsertProjectTextFile(project, 'references.bib', DEFAULT_LATEX_BIB)

@@ -5,6 +5,7 @@ import { promisify } from 'node:util'
 import { randomUUID, createHash } from 'node:crypto'
 import pLimit from 'p-limit'
 import * as Y from 'yjs'
+import { applySourceToCollaborationState } from '../collaboration.js'
 import {
   canAccessProject,
   findUserById,
@@ -535,9 +536,8 @@ export async function restoreProjectRevision(input: { projectId: string; fileId:
   })
 
   await writeTextFileToDrive(storage.ownerUserId, storage.file.driveFileId, revision.source)
-  const document = new Y.Doc()
-  document.getText('content').insert(0, revision.source)
-  await updateProjectFileCollaborationState(input.fileId, Y.encodeStateAsUpdate(document))
+  const updatedState = applySourceToCollaborationState(storage.collaborationState, revision.source)
+  await updateProjectFileCollaborationState(input.fileId, updatedState)
   await touchProjectFile(input.fileId)
 
   const restoredRevision = await createProjectRevisionSnapshot({
@@ -849,9 +849,9 @@ async function executeSaveFileJob(payload: SaveFilePayload): Promise<{ saved: tr
   if (rows[0]?.last_content_hash !== hash) {
     await assertCanStoreFileBytes(payload.userId, file.projectId, file.id, Buffer.byteLength(payload.source, 'utf8'))
     await writeTextFileToDrive(file.ownerUserId, file.driveFileId, payload.source)
-    const collaborationDocument = new Y.Doc()
-    collaborationDocument.getText('content').insert(0, payload.source)
-    await updateProjectFileCollaborationState(file.id, Y.encodeStateAsUpdate(collaborationDocument))
+    const fileStorage = await getProjectFileStorage(file.id)
+    const updatedState = applySourceToCollaborationState(fileStorage?.collaborationState ?? null, payload.source)
+    await updateProjectFileCollaborationState(file.id, updatedState)
     await touchProjectFile(file.id)
 
     await pool.query(

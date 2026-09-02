@@ -1,5 +1,5 @@
 import * as Y from 'yjs'
-import { hocuspocusServer } from '../collaboration.js'
+import { hocuspocusServer, applySourceToCollaborationState } from '../collaboration.js'
 import { getProjectFileStorage, listProjectFiles, touchProjectFile, updateProjectFileCollaborationState } from '../db.js'
 import { DRIVE_FOLDER_MIME_TYPE, readTextFileFromDrive, writeTextFileToDrive } from './drive.js'
 import Anthropic from '@anthropic-ai/sdk'
@@ -285,8 +285,7 @@ async function persistDocumentText(fileId: string, content: string): Promise<voi
   }
 
   await writeTextFileToDrive(storage.ownerUserId, storage.file.driveFileId, content)
-  const document = new Y.Doc()
-  document.getText('content').insert(0, content)
-  await updateProjectFileCollaborationState(fileId, Y.encodeStateAsUpdate(document))
+  const updatedState = applySourceToCollaborationState(storage.collaborationState, content)
+  await updateProjectFileCollaborationState(fileId, updatedState)
   await touchProjectFile(fileId)
 }

@@ -32,16 +32,41 @@ function recordDocumentTouch(documentName: string, persistedAt: number | null): 
   })
 }
 
-function encodeCollaborationStateFromSource(source: string): Uint8Array {
+export function encodeCollaborationStateFromSource(source: string): Uint8Array {
   const document = new Y.Doc()
   document.getText('content').insert(0, source)
   return Y.encodeStateAsUpdate(document)
 }
 
-function decodeCollaborationSource(state: Uint8Array): string {
+export function decodeCollaborationSource(state: Uint8Array): string {
   const document = new Y.Doc()
   Y.applyUpdate(document, state)
   return document.getText('content').toString()
+}
+
+export function applySourceToCollaborationState(existingState: Uint8Array | null, newSource: string): Uint8Array {
+  const document = new Y.Doc()
+  if (existingState && existingState.length > 0) {
+    try {
+      Y.applyUpdate(document, existingState)
+      const currentText = document.getText('content')
+      const currentSource = currentText.toString()
+      if (currentSource === newSource) {
+        return existingState
+      }
+      document.transact(() => {
+        currentText.delete(0, currentText.length)
+        currentText.insert(0, newSource)
+      })
+      return Y.encodeStateAsUpdate(document)
+    } catch (e) {
+      logger.warning('[collab] failed to apply source on existing collaboration state, resetting', e)
+    }
+  }
+
+  const freshDoc = new Y.Doc()
+  freshDoc.getText('content').insert(0, newSource)
+  return Y.encodeStateAsUpdate(freshDoc)
 }
 
 export const hocuspocusServer = new Hocuspocus({
@@ -111,23 +136,8 @@ export const hocuspocusServer = new Hocuspocus({
           return null
         }
 
-        const source = await readTextFileFromDrive(storage.ownerUserId, storage.file.driveFileId)
-
-        if (storage.collaborationState) {
-          const persistedSource = decodeCollaborationSource(storage.collaborationState)
-          if (persistedSource !== source) {
-            const refreshedState = encodeCollaborationStateFromSource(source)
-            await updateProjectFileCollaborationState(storage.file.id, refreshedState)
-            logger.warning('[collab] fetch refreshed stale collaboration state from file source', {
-              documentName,
-              fileId: storage.file.id,
-              persistedLength: persistedSource.length,
-              sourceLength: source.length,
-              bytes: refreshedState.length,
-            })
-            return refreshedState
-          }
-
+        // 1. If we already have a persisted Yjs collaboration binary state, ALWAYS use it directly as the source of truth!
+        if (storage.collaborationState && storage.collaborationState.length > 0) {
           logger.debug('[collab] fetch returning persisted collaboration state', {
             documentName,
             fileId: storage.file.id,
@@ -136,6 +146,8 @@ export const hocuspocusServer = new Hocuspocus({
           return storage.collaborationState
         }
 
+        // 2. Only if no collaboration state has ever been saved, seed it from disk
+        const source = await readTextFileFromDrive(storage.ownerUserId, storage.file.driveFileId)
         const initialState = encodeCollaborationStateFromSource(source)
         await updateProjectFileCollaborationState(storage.file.id, initialState)
         logger.info('[collab] fetch seeded initial state from drive', {

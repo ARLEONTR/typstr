@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto'
 import path from 'node:path'
 import JSZip from 'jszip'
 import * as Y from 'yjs'
+import { applySourceToCollaborationState } from '../collaboration.js'
 import {
   createProject,
   createProjectFile,
@@ -1424,9 +1425,8 @@ async function applySuggestionToFile(suggestion: ProjectReviewSuggestionRow) {
   const nextSource = `${source.slice(0, from)}${suggestion.replacement_text}${source.slice(to)}`
 
   await writeTextFileToDrive(storage.ownerUserId, storage.file.driveFileId, nextSource)
-  const document = new Y.Doc()
-  document.getText('content').insert(0, nextSource)
-  await updateProjectFileCollaborationState(storage.file.id, Y.encodeStateAsUpdate(document))
+  const updatedState = applySourceToCollaborationState(storage.collaborationState, nextSource)
+  await updateProjectFileCollaborationState(storage.file.id, updatedState)
   await touchProjectFile(storage.file.id)
 }
 
