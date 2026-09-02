@@ -75,12 +75,32 @@ export async function aiCollaborateOnDocument(
     newText = result.choices[0]?.message.content?.trim() ?? ''
   } else {
     const genAI = new GoogleGenerativeAI(options.apiKey)
-    const model = genAI.getGenerativeModel(
-      { model: options.model || 'gemini-2.5-flash', systemInstruction, generationConfig: { responseMimeType: 'application/json' } },
-      { apiVersion: 'v1beta' },
-    )
-    const result = await model.generateContent(fullPrompt)
-    newText = result.response.text().trim()
+    const targetModel = (options.model || 'gemini-2.5-flash').replace(/^models\//, '').trim()
+
+    const executeGeminiGeneration = async (modelName: string, apiVersion?: string) => {
+      const model = genAI.getGenerativeModel(
+        { model: modelName, systemInstruction, generationConfig: { responseMimeType: 'application/json' } },
+        apiVersion ? { apiVersion } : undefined,
+      )
+      const result = await model.generateContent(fullPrompt)
+      return result.response.text().trim()
+    }
+
+    try {
+      newText = await executeGeminiGeneration(targetModel, 'v1beta')
+    } catch (err: any) {
+      if (err?.status === 404 || err?.message?.includes('404')) {
+        try {
+          newText = await executeGeminiGeneration(targetModel)
+        } catch {
+          newText = await executeGeminiGeneration('gemini-1.5-flash')
+        }
+      } else if (err?.status === 429 && targetModel !== 'gemini-1.5-flash') {
+        newText = await executeGeminiGeneration('gemini-1.5-flash')
+      } else {
+        throw err
+      }
+    }
   }
 
   if (!newText) throw new Error('AI returned empty content')

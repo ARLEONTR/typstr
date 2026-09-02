@@ -27,15 +27,35 @@ const GEMINI_FALLBACK_MODELS = [
     id: 'gemini-2.5-flash',
     fullName: 'models/gemini-2.5-flash',
     name: 'Gemini 2.5 Flash',
-    description: 'Fast general-purpose Gemini model.',
+    description: 'Fast, state-of-the-art multimodal reasoning model for coding, mathematical synthesis, and technical drafting.',
   },
   {
     id: 'gemini-2.5-pro',
     fullName: 'models/gemini-2.5-pro',
     name: 'Gemini 2.5 Pro',
-    description: 'Higher-capability Gemini model for more complex tasks.',
+    description: 'Google’s most capable reasoning model for advanced mathematical proofs, literature reviews, and LaTeX authoring.',
+  },
+  {
+    id: 'gemini-1.5-pro',
+    fullName: 'models/gemini-1.5-pro',
+    name: 'Gemini 1.5 Pro',
+    description: 'High-capacity 2M token context window model for comprehensive project analysis.',
+  },
+  {
+    id: 'gemini-1.5-flash',
+    fullName: 'models/gemini-1.5-flash',
+    name: 'Gemini 1.5 Flash',
+    description: 'Lightweight high-speed fallback model.',
   },
 ];
+
+export function normalizeGeminiModelName(model?: string): string {
+  if (!model) return 'gemini-2.5-flash';
+  const clean = model.replace(/^models\//, '').trim();
+  if (clean === 'gemini-pro' || clean === 'gemini-1.0-pro') return 'gemini-2.5-pro';
+  if (clean === 'gemini-flash' || clean === 'gemini') return 'gemini-2.5-flash';
+  return clean;
+}
 
 function modelCacheKey(accessToken: string | null, apiKey?: string | null): string {
   if (apiKey) return `apikey:${apiKey.slice(0, 8)}`;
@@ -45,10 +65,18 @@ function modelCacheKey(accessToken: string | null, apiKey?: string | null): stri
 
 function pickRateLimitFallbackModel(currentModel: string, availableModels: Array<{ id: string }>): string | null {
   const normalizedCurrent = currentModel.toLowerCase();
-  if (normalizedCurrent.includes('flash')) return null;
+  if (normalizedCurrent.includes('1.5-flash')) return null;
 
-  const flashModel = availableModels.find((model) => model.id !== currentModel && model.id.toLowerCase().includes('flash'));
-  return flashModel?.id ?? null;
+  const fallbackPriority = ['gemini-2.5-flash', 'gemini-1.5-flash', 'gemini-1.5-flash-8b'];
+  for (const candidate of fallbackPriority) {
+    if (candidate !== currentModel) {
+      const match = availableModels.find((model) => model.id === candidate);
+      if (match) return match.id;
+    }
+  }
+
+  const anyFlash = availableModels.find((model) => model.id !== currentModel && model.id.toLowerCase().includes('flash'));
+  return anyFlash?.id ?? null;
 }
 
 // Helper to get compatible models with token-efficiency sorting
@@ -113,10 +141,13 @@ async function getAvailableModels(accessToken: string | null, userApiKey?: strin
       .sort((a: any, b: any) => {
         const getScore = (id: string) => {
           const lower = id.toLowerCase();
-          if (lower.includes('lite')) return 1;
-          if (lower.includes('flash')) return 2;
-          if (lower.includes('pro')) return 3;
-          return 4;
+          if (lower.includes('2.5-flash')) return 1;
+          if (lower.includes('2.5-pro')) return 2;
+          if (lower.includes('1.5-pro')) return 3;
+          if (lower.includes('1.5-flash')) return 4;
+          if (lower.includes('flash')) return 5;
+          if (lower.includes('pro')) return 6;
+          return 7;
         };
         return getScore(a.id) - getScore(b.id);
       });
