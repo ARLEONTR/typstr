@@ -1,96 +1,862 @@
-.authScreen,
-.landingPage {
+.authScreen {
   min-height: 100%;
   display: flex;
   align-items: center;
   justify-content: center;
   padding: 32px;
   background: var(--page-bg);
-}
-
-.authScreen {
   font-size: 15px;
   color: var(--text-soft);
 }
 
-.landingPanel {
-  width: min(720px, 100%);
-  padding: 48px;
-  border: 1px solid var(--panel-border);
-  border-radius: 28px;
-  background: var(--card-bg);
-  box-shadow: var(--surface-shadow);
+/* ==========================================================================
+   Modern Typstr Landing Page Architecture
+   ========================================================================== */
+
+.landingRoot {
+  position: relative;
+  min-height: 100vh;
+  width: 100%;
+  background: var(--page-bg);
+  color: var(--text-bright);
+  overflow-x: hidden;
+  display: flex;
+  flex-direction: column;
 }
 
-.landingEyebrow {
-  display: inline-flex;
-  margin-bottom: 18px;
-  padding: 6px 12px;
-  border-radius: 999px;
-  background: var(--action-bg);
-  color: var(--accent);
-  font-size: 12px;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
+/* Ambient Lighting & Grid Overlay */
+.landingGlowOrb1 {
+  position: absolute;
+  top: -150px;
+  left: 20%;
+  width: 650px;
+  height: 550px;
+  background: radial-gradient(circle, color-mix(in srgb, var(--accent) 22%, transparent) 0%, transparent 70%);
+  pointer-events: none;
+  filter: blur(80px);
+  z-index: 0;
 }
 
-.landingPanel h1 {
-  font-size: clamp(36px, 7vw, 64px);
-  line-height: 0.95;
-  margin-bottom: 18px;
+.landingGlowOrb2 {
+  position: absolute;
+  top: 400px;
+  right: 5%;
+  width: 500px;
+  height: 500px;
+  background: radial-gradient(circle, color-mix(in srgb, var(--accent) 14%, transparent) 0%, transparent 70%);
+  pointer-events: none;
+  filter: blur(100px);
+  z-index: 0;
+}
+
+.landingGridOverlay {
+  position: absolute;
+  inset: 0;
+  background-image: 
+    linear-gradient(to right, color-mix(in srgb, var(--panel-border) 35%, transparent) 1px, transparent 1px),
+    linear-gradient(to bottom, color-mix(in srgb, var(--panel-border) 35%, transparent) 1px, transparent 1px);
+  background-size: 48px 48px;
+  mask-image: radial-gradient(ellipse 80% 50% at 50% 0%, #000 70%, transparent 100%);
+  -webkit-mask-image: radial-gradient(ellipse 80% 50% at 50% 0%, #000 70%, transparent 100%);
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* Navigation Header */
+.landingNav {
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 36px;
+  background: color-mix(in srgb, var(--page-bg) 80%, transparent);
+  backdrop-filter: blur(16px);
+  border-bottom: 1px solid color-mix(in srgb, var(--panel-border) 60%, transparent);
+}
+
+.landingNavBrand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.landingNavLogo {
+  height: 38px;
+  width: auto;
+}
+
+.landingNavTitle {
+  font-size: 1.2rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
   color: var(--text-bright);
 }
 
-.landingPanel p {
-  max-width: 54ch;
-  margin-bottom: 28px;
-  color: var(--text-soft);
-  line-height: 1.6;
+.landingNavBadge {
+  font-size: 0.75rem;
+  font-weight: 600;
+  padding: 3px 8px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--accent) 15%, transparent);
+  color: var(--accent);
+  border: 1px solid color-mix(in srgb, var(--accent) 30%, transparent);
 }
 
-.landingButton {
+.landingNavLinks {
+  display: flex;
+  align-items: center;
+  gap: 28px;
+}
+
+.landingNavLinks a {
+  font-size: 0.92rem;
+  font-weight: 500;
+  color: var(--text-soft);
+  text-decoration: none;
+  transition: color 0.15s ease;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.landingNavLinks a:hover {
+  color: var(--text-bright);
+}
+
+.landingCloudLink {
+  color: var(--accent) !important;
+  font-weight: 600 !important;
+}
+
+.landingNavCta {
+  padding: 8px 20px;
+  font-size: 0.9rem;
+  font-weight: 600;
+  border-radius: 12px;
   background: var(--accent);
-  color: var(--on-accent);
+  color: var(--on-accent, #fff);
+  border: none;
+  cursor: pointer;
+  transition: transform 0.15s ease, opacity 0.15s ease, box-shadow 0.15s ease;
+  box-shadow: 0 4px 14px color-mix(in srgb, var(--accent) 30%, transparent);
+}
+
+.landingNavCta:hover {
+  transform: translateY(-1px);
+  opacity: 0.95;
+  box-shadow: 0 6px 20px color-mix(in srgb, var(--accent) 45%, transparent);
+}
+
+/* Main Container */
+.landingMain {
+  position: relative;
+  z-index: 1;
+  max-width: 1240px;
+  margin: 0 auto;
+  padding: 48px 24px 80px;
+  width: 100%;
+}
+
+/* Hero Section */
+.landingHero {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  margin-bottom: 96px;
+}
+
+.landingHeroHeader {
+  max-width: 860px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin-bottom: 48px;
+}
+
+.landingPill {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 16px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  border: 1px solid color-mix(in srgb, var(--accent) 30%, transparent);
+  color: var(--text-bright);
+  font-size: 0.82rem;
+  font-weight: 600;
+  margin-bottom: 24px;
+}
+
+.landingHeadline {
+  font-size: clamp(2.4rem, 5.2vw, 4rem);
+  font-weight: 800;
+  line-height: 1.12;
+  letter-spacing: -0.03em;
+  color: var(--text-bright);
+  margin-bottom: 20px;
+}
+
+.landingHeadlineGradient {
+  background: linear-gradient(135deg, var(--accent) 0%, color-mix(in srgb, var(--accent) 60%, #fff 40%) 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.landingSubheadline {
+  font-size: clamp(1.05rem, 1.8vw, 1.25rem);
+  line-height: 1.6;
+  color: var(--text-soft);
+  max-width: 720px;
+  margin: 0 auto;
+}
+
+/* Hero Grid: Auth Card + IDE Mockup */
+.landingHeroGrid {
+  display: grid;
+  grid-template-columns: minmax(320px, 380px) 1fr;
+  gap: 32px;
+  width: 100%;
+  text-align: left;
+  align-items: stretch;
+}
+
+@media (max-width: 960px) {
+  .landingHeroGrid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Auth Card */
+.landingAuthCard {
+  display: flex;
+  flex-direction: column;
+  padding: 32px;
+  border-radius: 24px;
+  background: color-mix(in srgb, var(--card-bg) 85%, transparent);
+  backdrop-filter: blur(16px);
+  border: 1px solid var(--panel-border);
+  box-shadow: 0 20px 48px rgba(0, 0, 0, 0.25);
+}
+
+.landingAuthCardHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+.landingAuthCardTitle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 1.15rem;
   font-weight: 700;
-  padding: 12px 20px;
+  color: var(--text-bright);
+}
+
+.landingAuthBadge {
+  font-size: 0.72rem;
+  font-weight: 600;
+  padding: 3px 8px;
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--success, #10b981) 15%, transparent);
+  color: var(--success, #10b981);
+}
+
+.landingAuthDescription {
+  font-size: 0.88rem;
+  color: var(--text-soft);
+  line-height: 1.5;
+  margin-bottom: 24px;
+}
+
+.landingCloudCallout {
+  margin-top: auto;
+  padding-top: 20px;
+  border-top: 1px solid color-mix(in srgb, var(--panel-border) 60%, transparent);
+  font-size: 0.82rem;
+  color: var(--text-soft);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.landingCloudCallout a {
+  color: var(--accent);
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.landingCloudCallout a:hover {
+  text-decoration: underline;
+}
+
+/* IDE & Preview Showcase Mockup */
+.landingMockupCard {
+  display: flex;
+  flex-direction: column;
+  border-radius: 24px;
+  background: #0f111a;
+  border: 1px solid color-mix(in srgb, var(--panel-border) 80%, transparent);
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.4);
+  overflow: hidden;
+  min-height: 400px;
+}
+
+.landingMockupHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 18px;
+  background: #141724;
+  border-bottom: 1px solid #232738;
+}
+
+.mockupWindowDots {
+  display: flex;
+  gap: 6px;
+}
+
+.mockupDot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+}
+
+.dotRed { background: #ff5f56; }
+.dotYellow { background: #ffbd2e; }
+.dotGreen { background: #27c93f; }
+
+.mockupFileName {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.8rem;
+  color: #8b949e;
+  font-family: monospace;
+}
+
+.mockupPillBadge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: #38bdf8;
+  background: rgba(56, 189, 248, 0.12);
+  padding: 2px 8px;
+  border-radius: 999px;
+}
+
+.landingMockupBody {
+  display: grid;
+  grid-template-columns: 1.15fr 1fr;
+  flex: 1;
+  background: #0d1117;
+  overflow: hidden;
+}
+
+@media (max-width: 768px) {
+  .landingMockupBody {
+    grid-template-columns: 1fr;
+  }
+}
+
+.mockupEditorPane {
+  position: relative;
+  display: flex;
+  padding: 16px;
+  background: #0b0e14;
+  border-right: 1px solid #232738;
+  font-family: 'JetBrains Mono', 'Fira Code', monospace;
+  font-size: 0.82rem;
+  line-height: 1.6;
+  color: #c9d1d9;
+  overflow-x: auto;
+}
+
+.mockupGutter {
+  display: flex;
+  flex-direction: column;
+  padding-right: 14px;
+  color: #484f58;
+  text-align: right;
+  user-select: none;
+}
+
+.mockupCode {
+  margin: 0;
+  padding: 0;
+  background: transparent;
+  color: #e6edf3;
+  font-family: inherit;
+  font-size: inherit;
+  line-height: inherit;
+  white-space: pre-wrap;
+}
+
+.codeKeyword { color: #ff7b72; font-weight: 600; }
+.codeString { color: #a5d6ff; }
+.codeHeading { color: #7ee787; font-weight: 700; }
+.codeMath { color: #f2cc60; }
+.codeCite { color: #d2a8ff; text-decoration: underline; }
+
+.mockupCollaboratorBadge {
+  position: absolute;
+  bottom: 14px;
+  right: 14px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.72rem;
+  background: rgba(35, 134, 54, 0.2);
+  border: 1px solid rgba(46, 160, 67, 0.4);
+  color: #7ee787;
+  padding: 4px 10px;
+  border-radius: 999px;
+  backdrop-filter: blur(8px);
+}
+
+.mockupPreviewPane {
+  padding: 20px;
+  background: #161b22;
+  display: flex;
+  flex-direction: column;
+}
+
+.mockupPaper {
+  position: relative;
+  background: #ffffff;
+  color: #1f2328;
+  padding: 24px;
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+  font-family: 'Times New Roman', 'Source Serif 4', Georgia, serif;
+  height: 100%;
+}
+
+.paperTitle {
+  font-size: 1.15rem;
+  font-weight: 700;
+  text-align: center;
+  margin: 0 0 6px 0;
+  color: #111827;
+}
+
+.paperAuthors {
+  font-size: 0.78rem;
+  text-align: center;
+  color: #4b5563;
+  margin-bottom: 14px;
+}
+
+.paperAbstract {
+  font-size: 0.76rem;
+  line-height: 1.45;
+  color: #374151;
+  background: #f3f4f6;
+  padding: 10px 12px;
+  border-radius: 4px;
+  margin-bottom: 14px;
+}
+
+.paperSection {
+  font-size: 0.88rem;
+  font-weight: 700;
+  margin-bottom: 4px;
+  color: #111827;
+}
+
+.paperText {
+  font-size: 0.78rem;
+  color: #374151;
+  margin: 0 0 8px 0;
+}
+
+.paperFormula {
+  font-size: 0.85rem;
+  text-align: center;
+  margin: 10px 0;
+  color: #111827;
+  font-family: 'Times New Roman', Georgia, serif;
+}
+
+.paperSyncTag {
+  position: absolute;
+  bottom: 8px;
+  right: 8px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.68rem;
+  font-family: sans-serif;
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+
+/* Feature Highlights Bento Grid */
+.landingFeaturesSection {
+  margin-bottom: 100px;
+}
+
+.landingSectionHeader {
+  text-align: center;
+  margin-bottom: 48px;
+}
+
+.landingSectionTitle {
+  font-size: clamp(2rem, 3.5vw, 2.8rem);
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  margin-bottom: 12px;
+  color: var(--text-bright);
+}
+
+.landingSectionSubtitle {
+  font-size: 1.05rem;
+  color: var(--text-soft);
+  max-width: 600px;
+  margin: 0 auto;
+}
+
+.landingBentoGrid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 24px;
+}
+
+@media (max-width: 900px) {
+  .landingBentoGrid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.bentoCard {
+  display: flex;
+  flex-direction: column;
+  padding: 32px;
+  border-radius: 20px;
+  background: var(--card-bg);
+  border: 1px solid var(--panel-border);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.15);
+  transition: transform 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.bentoCard:hover {
+  transform: translateY(-4px);
+  border-color: color-mix(in srgb, var(--accent) 40%, var(--panel-border) 60%);
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.25);
+}
+
+.bentoCardWide {
+  grid-column: span 2;
+}
+
+@media (max-width: 900px) {
+  .bentoCardWide {
+    grid-column: span 1;
+  }
+}
+
+.bentoIconBox {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 48px;
+  height: 48px;
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--accent) 15%, transparent);
+  margin-bottom: 20px;
+}
+
+.bentoCard h3 {
+  font-size: 1.25rem;
+  font-weight: 700;
+  margin-bottom: 10px;
+  color: var(--text-bright);
+}
+
+.bentoCard p {
+  font-size: 0.92rem;
+  line-height: 1.6;
+  color: var(--text-soft);
+  margin-bottom: 20px;
+}
+
+.bentoBadgeRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: auto;
+}
+
+.bentoPill {
+  font-size: 0.75rem;
+  font-weight: 600;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--action-bg) 80%, transparent);
+  border: 1px solid color-mix(in srgb, var(--panel-border) 60%, transparent);
+  color: var(--text-bright);
+}
+
+/* Self-Hosting Terminal Section */
+.landingSelfHostSection {
+  margin-bottom: 96px;
+}
+
+.landingSelfHostBox {
+  display: grid;
+  grid-template-columns: 1.1fr 1fr;
+  gap: 40px;
+  align-items: center;
+  padding: 48px;
+  border-radius: 28px;
+  background: color-mix(in srgb, var(--card-bg) 80%, transparent);
+  border: 1px solid var(--panel-border);
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.2);
+}
+
+@media (max-width: 900px) {
+  .landingSelfHostBox {
+    grid-template-columns: 1fr;
+    padding: 32px;
+  }
+}
+
+.landingSelfHostContent h2 {
+  font-size: 1.85rem;
+  font-weight: 800;
+  margin-bottom: 12px;
+  color: var(--text-bright);
+}
+
+.landingSelfHostContent p {
+  font-size: 0.95rem;
+  color: var(--text-soft);
+  line-height: 1.6;
+  margin-bottom: 20px;
+}
+
+.landingCheckList {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.landingCheckList li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 0.9rem;
+  font-weight: 500;
+  color: var(--text-bright);
+}
+
+.landingTerminalSnippet {
+  background: #090b10;
+  border-radius: 16px;
+  border: 1px solid #232738;
+  overflow: hidden;
+  box-shadow: 0 12px 36px rgba(0, 0, 0, 0.4);
+}
+
+.landingTerminalBar {
+  display: flex;
+  align-items: center;
+  padding: 10px 14px;
+  background: #111420;
+  border-bottom: 1px solid #232738;
+  gap: 8px;
+}
+
+.landingTerminalTitle {
+  font-size: 0.78rem;
+  font-family: monospace;
+  color: #8b949e;
+  margin-left: 6px;
+  flex: 1;
+}
+
+.landingCopyBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 6px;
+  background: #232738;
+  border: 1px solid #30363d;
+  color: #c9d1d9;
+  font-size: 0.75rem;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.landingCopyBtn:hover {
+  background: #30363d;
+  color: #fff;
+}
+
+.landingTerminalCode {
+  margin: 0;
+  padding: 18px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.82rem;
+  line-height: 1.6;
+  color: #7ee787;
+  overflow-x: auto;
+}
+
+.termComment {
+  color: #8b949e;
+}
+
+/* Footer */
+.landingFooter {
+  border-top: 1px solid var(--panel-border);
+  background: color-mix(in srgb, var(--page-bg) 95%, transparent);
+  padding: 60px 36px 30px;
+}
+
+.landingFooterContent {
+  max-width: 1240px;
+  margin: 0 auto;
+  display: flex;
+  justify-content: space-between;
+  gap: 48px;
+  margin-bottom: 48px;
+}
+
+@media (max-width: 768px) {
+  .landingFooterContent {
+    flex-direction: column;
+  }
+}
+
+.landingFooterBrand {
+  max-width: 320px;
+}
+
+.landingFooterTagline {
+  margin-top: 12px;
+  font-size: 0.88rem;
+  color: var(--text-soft);
+  line-height: 1.5;
+}
+
+.landingFooterLinks {
+  display: flex;
+  gap: 56px;
+}
+
+@media (max-width: 600px) {
+  .landingFooterLinks {
+    flex-direction: column;
+    gap: 28px;
+  }
+}
+
+.landingFooterCol {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.landingFooterCol h4 {
+  font-size: 0.88rem;
+  font-weight: 700;
+  color: var(--text-bright);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 4px;
+}
+
+.landingFooterCol a {
+  font-size: 0.86rem;
+  color: var(--text-soft);
+  text-decoration: none;
+  transition: color 0.15s ease;
+}
+
+.landingFooterCol a:hover {
+  color: var(--accent);
+}
+
+.landingFooterBottom {
+  max-width: 1240px;
+  margin: 0 auto;
+  padding-top: 24px;
+  border-top: 1px solid color-mix(in srgb, var(--panel-border) 40%, transparent);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 0.82rem;
+  color: var(--muted-text);
+}
+
+.landingFooterBottom a {
+  color: var(--text-soft);
+  text-decoration: none;
+}
+
+.landingFooterBottom a:hover {
+  color: var(--accent);
+}
+
+/* Auth Buttons */
+.loginButtonGroup {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 12px;
+  width: 100%;
 }
 
 .googleButton {
   display: inline-flex;
   align-items: center;
   gap: 14px;
-  min-width: min(100%, 360px);
+  width: 100%;
   padding: 14px 18px;
   border: 1px solid color-mix(in srgb, var(--panel-border) 75%, white 25%);
-  border-radius: 18px;
+  border-radius: 16px;
   background: linear-gradient(180deg, color-mix(in srgb, var(--card-bg) 88%, white 12%) 0%, var(--card-bg) 100%);
   color: var(--text-bright);
   font-weight: 700;
-  box-shadow: 0 18px 40px rgba(15, 23, 42, 0.12);
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.12);
   transition: transform 140ms ease, box-shadow 140ms ease, border-color 140ms ease;
+  cursor: pointer;
 }
 
 .googleButton:hover {
   transform: translateY(-1px);
   border-color: color-mix(in srgb, var(--accent) 45%, var(--panel-border) 55%);
-  box-shadow: 0 22px 50px rgba(15, 23, 42, 0.16);
+  box-shadow: 0 14px 30px rgba(0, 0, 0, 0.18);
 }
 
 .googleButtonMark {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 42px;
-  height: 42px;
-  border-radius: 14px;
+  width: 38px;
+  height: 38px;
+  border-radius: 10px;
   background: white;
   flex: 0 0 auto;
   box-shadow: inset 0 0 0 1px rgba(15, 23, 42, 0.08);
 }
 
 .googleButtonMark svg {
-  width: 22px;
-  height: 22px;
+  width: 20px;
+  height: 20px;
 }
 
 .googleButtonText {
@@ -103,31 +869,22 @@
 
 .googleButtonText small {
   color: var(--text-soft);
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 500;
-}
-
-.loginButtonGroup {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 12px;
-  width: 100%;
 }
 
 .ldapButton {
   display: inline-flex;
   align-items: center;
-  justify-content: flex-start;
   gap: 14px;
-  min-width: min(100%, 360px);
-  padding: 14px 20px;
+  width: 100%;
+  padding: 14px 18px;
   border: 1px solid var(--panel-border);
-  border-radius: 18px;
-  background: var(--surface-card);
+  border-radius: 16px;
+  background: var(--surface-card, var(--card-bg));
   color: var(--text-bright);
   font-weight: 600;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.08);
   cursor: pointer;
   transition: transform 0.15s ease, border-color 0.15s ease, background 0.15s ease;
 }
@@ -135,7 +892,7 @@
 .ldapButton:hover {
   transform: translateY(-1px);
   border-color: var(--accent);
-  background: color-mix(in srgb, var(--surface-card) 90%, var(--accent) 10%);
+  background: color-mix(in srgb, var(--card-bg) 90%, var(--accent) 10%);
 }
 
 .ldapButtonMark {
@@ -144,7 +901,7 @@
   justify-content: center;
   width: 38px;
   height: 38px;
-  border-radius: 12px;
+  border-radius: 10px;
   background: color-mix(in srgb, var(--accent) 15%, transparent);
   color: var(--accent);
 }
@@ -159,7 +916,7 @@
 
 .ldapButtonText small {
   color: var(--text-soft);
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 500;
 }
 
@@ -167,38 +924,24 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-width: min(100%, 360px);
+  width: 100%;
   margin-top: 4px;
   padding: 12px 18px;
   border: 1px dashed color-mix(in srgb, var(--panel-border) 70%, var(--accent) 30%);
-  border-radius: 16px;
+  border-radius: 14px;
   background: color-mix(in srgb, var(--action-bg) 82%, white 18%);
   color: var(--text-bright);
   font-weight: 600;
+  font-size: 0.88rem;
   cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease;
 }
 
 .devLoginButton:hover {
-  border-color: color-mix(in srgb, var(--accent) 50%, var(--panel-border) 50%);
-  background: color-mix(in srgb, var(--action-bg) 70%, white 30%);
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--action-bg) 65%, var(--accent) 35%);
 }
 
-.landingButton.secondary {
-  margin-top: 12px;
-  background: var(--action-bg);
-  color: var(--text-bright);
-}
-
-.landingLegal {
-  margin-top: 24px;
-  margin-bottom: 0;
-  font-size: 13px;
-  color: var(--muted-text);
-}
-
-.landingLegal a {
-  color: var(--text-soft);
-}
 
 /* LDAP Modal */
 .ldapModalOverlay {

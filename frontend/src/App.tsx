@@ -13,7 +13,28 @@ import PdfPreview from './components/Editor/PdfPreview'
 import { AuthProvider, useAuth } from './hooks/useAuth'
 import { GeminiProvider } from './context/GeminiContext'
 import { PrivacyPolicy, TermsOfService } from './components/Legal/LegalPage'
-import { Eye, EyeOff, FileText, Focus, History, Loader2, MessageSquare, Minimize2, RefreshCw } from './icons'
+import {
+  Eye,
+  EyeOff,
+  FileText,
+  Focus,
+  History,
+  Loader2,
+  MessageSquare,
+  Minimize2,
+  RefreshCw,
+  Sparkles,
+  Zap,
+  Users,
+  Shield,
+  Terminal,
+  Check,
+  Copy,
+  ExternalLink,
+  Lock,
+  Brain,
+  GraduationCap,
+} from './icons'
 import { THEME_STORAGE_KEY, THEME_PRESETS, DEFAULT_THEME, normalizeWorkspaceTheme, resolveThemeVars, themeStorageKeyForUser } from './theme'
 import { safeStorage } from './safeStorage'
 import type { BillingStatus, CommentSelectionAnchor, CompileDiagnostic, ProjectComment, ProjectRevision, TypstPreviewSessionResponse } from './types'
@@ -102,6 +123,7 @@ function LandingPage() {
   const [ldapPassword, setLdapPassword] = useState('')
   const [ldapError, setLdapError] = useState<string | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [copiedCmd, setCopiedCmd] = useState(false)
 
   const handleLdapSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -127,72 +149,376 @@ function LandingPage() {
     setLdapError(null)
   }
 
+  const handleCopyCommand = () => {
+    navigator.clipboard.writeText('docker compose -f docker-compose.yml -f docker-compose.dev.yml up --build')
+    setCopiedCmd(true)
+    setTimeout(() => setCopiedCmd(false), 2000)
+  }
+
+  const scrollToAuth = () => {
+    const el = document.getElementById('auth-section')
+    if (el) {
+      el.scrollIntoView({ behavior: 'smooth' })
+    }
+  }
+
   return (
-    <div className="landingPage">
-      <div className="landingPanel">
-        <div style={{ display: 'flex', alignItems: 'center', marginBottom: '12px' }}>
-          <img src={`/logo.svg?v=${Date.now()}`} alt="Typstr" style={{ height: '120px', marginRight: '8px' ,  marginLeft: '8px' }} />
-          <span className="landingEyebrow" style={{ margin: '8px'  }}>TYPSTR</span> (<em>type string</em>)
+    <div className="landingRoot">
+      {/* Dynamic Ambient Background Elements */}
+      <div className="landingGlowOrb1" aria-hidden />
+      <div className="landingGlowOrb2" aria-hidden />
+      <div className="landingGridOverlay" aria-hidden />
+
+      {/* Floating Navigation Header */}
+      <header className="landingNav">
+        <div className="landingNavBrand">
+          <img src={`/logo.svg?v=${Date.now()}`} alt="Typstr Logo" className="landingNavLogo" />
+          <span className="landingNavTitle">TYPSTR</span>
+          <span className="landingNavBadge">v0.2 Open Source</span>
+        </div>
+        <nav className="landingNavLinks">
+          <a href="#features">Features</a>
+          <a href="#self-hosting">Self-Hosting</a>
+          <a href="https://typs.tr" target="_blank" rel="noopener noreferrer" className="landingCloudLink">
+            Cloud App (typs.tr) <ExternalLink style={{ width: 13, height: 13, display: 'inline' }} />
+          </a>
+          <a href="https://github.com/ARLEONTR/typstr" target="_blank" rel="noopener noreferrer" className="landingGithubLink">
+            GitHub <ExternalLink style={{ width: 13, height: 13, display: 'inline' }} />
+          </a>
+        </nav>
+        <button className="landingNavCta" onClick={scrollToAuth}>
+          Sign In
+        </button>
+      </header>
+
+      {/* Hero Section */}
+      <main className="landingMain">
+        <section className="landingHero">
+          <div className="landingHeroHeader">
+            <div className="landingPill">
+              <Sparkles style={{ width: 14, height: 14, color: 'var(--accent)' }} />
+              <span>AGPLv3 Open Source · Typst + LaTeX · Self-Hostable</span>
+            </div>
+
+            <h1 className="landingHeadline">
+              Collaborative Technical Writing, <br />
+              <span className="landingHeadlineGradient">Reimagined for Typst & LaTeX.</span>
+            </h1>
+
+            <p className="landingSubheadline">
+              Sub-second WebAssembly compilation, multiplayer CRDT editing, instant citation discovery across arXiv & DBLP, and 100% self-hosted privacy with enterprise LDAP.
+            </p>
+          </div>
+
+          <div className="landingHeroGrid">
+            {/* Left Card: Auth Access */}
+            <div className="landingAuthCard" id="auth-section">
+              <div className="landingAuthCardHeader">
+                <div className="landingAuthCardTitle">
+                  <Lock style={{ width: 18, height: 18, color: 'var(--accent)' }} />
+                  <span>Access Workspace</span>
+                </div>
+                <span className="landingAuthBadge">Secure & Encrypted</span>
+              </div>
+
+              <p className="landingAuthDescription">
+                Sign in to collaborate on LaTeX and Typst projects saved on your server or Google Drive.
+              </p>
+
+              <div className="loginButtonGroup">
+                {providers.google ? (
+                  <button className="googleButton" onClick={login}>
+                    <span className="googleButtonMark" aria-hidden>
+                      <svg viewBox="0 0 24 24" focusable="false">
+                        <path fill="#EA4335" d="M12 10.2v3.9h5.4c-.2 1.3-1.6 3.9-5.4 3.9-3.2 0-5.9-2.7-5.9-6s2.7-6 5.9-6c1.8 0 3.1.8 3.8 1.4l2.6-2.5C16.8 3.5 14.6 2.6 12 2.6 6.9 2.6 2.8 6.7 2.8 11.8S6.9 21 12 21c6.1 0 9.1-4.3 9.1-6.5 0-.4 0-.8-.1-1.2H12Z"/>
+                        <path fill="#4285F4" d="M21.1 13.3c.1.4.1.8.1 1.2 0 2.2-3 6.5-9.1 6.5-5.1 0-9.2-4.1-9.2-9.2S6.9 2.6 12 2.6c2.6 0 4.8.9 6.4 2.4l-2.6 2.5c-.7-.7-2-1.4-3.8-1.4-2.8 0-5.1 1.9-5.8 4.5l-3-.2v-2C4.8 5 8.1 2.6 12 2.6c2.6 0 4.8.9 6.4 2.4 1.5 1.4 2.7 3.7 2.7 8.3Z" opacity=".001"/>
+                        <path fill="#FBBC05" d="M6.2 13.6a6.1 6.1 0 0 1 0-3.7l-3-.2v3.9l3 .1Z"/>
+                        <path fill="#34A853" d="M12 21c2.5 0 4.7-.8 6.2-2.3l-3-2.4c-.8.6-1.9 1-3.2 1-3.2 0-5.9-2.7-5.9-6 0-.4 0-.8.1-1.2l-3-.2A9.2 9.2 0 0 0 12 21Z"/>
+                      </svg>
+                    </span>
+                    <span className="googleButtonText">
+                      <span>Sign in with Google</span>
+                      <small>Google Drive & Account Integration</small>
+                    </span>
+                  </button>
+                ) : null}
+
+                {providers.ldap ? (
+                  <button className="ldapButton" onClick={() => setShowLdapModal(true)}>
+                    <span className="ldapButtonMark" aria-hidden>
+                      <Users style={{ width: 20, height: 20 }} />
+                    </span>
+                    <span className="ldapButtonText">
+                      <span>Sign in with LDAP</span>
+                      <small>Active Directory / OpenLDAP Account</small>
+                    </span>
+                  </button>
+                ) : null}
+
+                {providers.localDev ? (
+                  <button
+                    className="devLoginButton"
+                    onClick={() => {
+                      void devLogin()
+                    }}
+                  >
+                    <Zap style={{ width: 16, height: 16, display: 'inline', marginRight: 6 }} />
+                    Continue with Instant Dev Login
+                  </button>
+                ) : null}
+              </div>
+
+              <div className="landingCloudCallout">
+                <span>Looking for the managed cloud version?</span>
+                <a href="https://typs.tr" target="_blank" rel="noopener noreferrer">
+                  Access typs.tr ↗
+                </a>
+              </div>
+            </div>
+
+            {/* Right Card: Interactive IDE & Preview Showcase Mockup */}
+            <div className="landingMockupCard">
+              <div className="landingMockupHeader">
+                <div className="mockupWindowDots">
+                  <span className="mockupDot dotRed" />
+                  <span className="mockupDot dotYellow" />
+                  <span className="mockupDot dotGreen" />
+                </div>
+                <div className="mockupFileName">
+                  <FileText style={{ width: 13, height: 13 }} />
+                  <span>main.typ — Typstr Studio</span>
+                </div>
+                <div className="mockupPillBadge">
+                  <Zap style={{ width: 12, height: 12 }} /> 8ms WASM
+                </div>
+              </div>
+
+              <div className="landingMockupBody">
+                <div className="mockupEditorPane">
+                  <div className="mockupGutter">
+                    <span>1</span>
+                    <span>2</span>
+                    <span>3</span>
+                    <span>4</span>
+                    <span>5</span>
+                    <span>6</span>
+                    <span>7</span>
+                    <span>8</span>
+                    <span>9</span>
+                    <span>10</span>
+                  </div>
+                  <pre className="mockupCode">
+                    <code>
+                      <span className="codeKeyword">#import</span> <span className="codeString">"@preview/ilm:0.1.3"</span>: *{'\n'}
+                      <span className="codeKeyword">#show</span>: ilm.with({'\n'}
+                      {'  '}title: <span className="codeString">"Attention Is All You Need"</span>,{'\n'}
+                      {'  '}author: <span className="codeString">"Alice Smith, Bob Jones"</span>{'\n'}
+                      ){'\n\n'}
+                      <span className="codeHeading">= 1. Self-Attention</span>{'\n'}
+                      We formulate the scaled dot-product attention:{'\n'}
+                      <span className="codeMath">$ "Attention"(Q, K, V) = "softmax"((Q K^T) / sqrt(d_k)) V $</span>{'\n'}
+                      As shown in <span className="codeCite">@vaswani2017attention</span>, this mechanism eliminates recurrence.
+                    </code>
+                  </pre>
+                  <div className="mockupCollaboratorBadge">
+                    <span className="mockupAvatar">🟢</span>
+                    <span>Alice typing line 9...</span>
+                  </div>
+                </div>
+
+                <div className="mockupPreviewPane">
+                  <div className="mockupPaper">
+                    <h4 className="paperTitle">Attention Is All You Need</h4>
+                    <p className="paperAuthors">Alice Smith · Bob Jones</p>
+                    <div className="paperAbstract">
+                      <strong>Abstract</strong> — Differentiable attention networks achieve state of the art results while being significantly more parallelizable than recurrence.
+                    </div>
+                    <div className="paperSection">1. Self-Attention</div>
+                    <p className="paperText">We formulate the scaled dot-product attention:</p>
+                    <div className="paperFormula">
+                      Attention(Q, K, V) = softmax( (Q K<sup>T</sup>) / √d<sub>k</sub> ) V
+                    </div>
+                    <div className="paperSyncTag">
+                      <RefreshCw style={{ width: 11, height: 11 }} /> SyncTeX Active
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        {/* Feature Highlights Bento Grid */}
+        <section className="landingFeaturesSection" id="features">
+          <div className="landingSectionHeader">
+            <h2 className="landingSectionTitle">Engineered for High-Velocity Research</h2>
+            <p className="landingSectionSubtitle">Everything you need to write, collaborate, compile, and publish technical papers without friction.</p>
+          </div>
+
+          <div className="landingBentoGrid">
+            <div className="bentoCard bentoCardWide">
+              <div className="bentoIconBox">
+                <Zap style={{ width: 24, height: 24, color: 'var(--accent)' }} />
+              </div>
+              <h3>Dual-Engine WASM & Streaming Preview</h3>
+              <p>
+                Instant, zero-latency in-browser compilation with Typst WebAssembly and BusyTeX, backed by streaming TinyMist live preview and full TeX Live PDF generation.
+              </p>
+              <div className="bentoBadgeRow">
+                <span className="bentoPill">⚡ Typst WASM</span>
+                <span className="bentoPill">📄 Full TeX Live</span>
+                <span className="bentoPill">🔄 TinyMist Live Preview</span>
+              </div>
+            </div>
+
+            <div className="bentoCard">
+              <div className="bentoIconBox">
+                <Users style={{ width: 24, height: 24, color: 'var(--accent)' }} />
+              </div>
+              <h3>Multiplayer CRDT Collaboration</h3>
+              <p>
+                Real-time conflict-free collaborative editing powered by Yjs and Hocuspocus with live presence, color-coded cursors, and project chat.
+              </p>
+              <div className="bentoBadgeRow">
+                <span className="bentoPill">Yjs CRDTs</span>
+                <span className="bentoPill">Follow Mode</span>
+              </div>
+            </div>
+
+            <div className="bentoCard">
+              <div className="bentoIconBox">
+                <GraduationCap style={{ width: 24, height: 24, color: 'var(--accent)' }} />
+              </div>
+              <h3>Academic Citation Discovery</h3>
+              <p>
+                Search millions of papers across arXiv, Semantic Scholar, CrossRef, and DBLP right from your editor with one-click BibTeX insertion.
+              </p>
+              <div className="bentoBadgeRow">
+                <span className="bentoPill">arXiv</span>
+                <span className="bentoPill">DBLP</span>
+                <span className="bentoPill">Semantic Scholar</span>
+              </div>
+            </div>
+
+            <div className="bentoCard">
+              <div className="bentoIconBox">
+                <Shield style={{ width: 24, height: 24, color: 'var(--accent)' }} />
+              </div>
+              <h3>Enterprise LDAP & Self-Hosting</h3>
+              <p>
+                Full data privacy on your own infrastructure. Native OpenLDAP and Active Directory authentication with local disk persistence.
+              </p>
+              <div className="bentoBadgeRow">
+                <span className="bentoPill">OpenLDAP</span>
+                <span className="bentoPill">Active Directory</span>
+                <span className="bentoPill">Local Storage</span>
+              </div>
+            </div>
+
+            <div className="bentoCard bentoCardWide">
+              <div className="bentoIconBox">
+                <Brain style={{ width: 24, height: 24, color: 'var(--accent)' }} />
+              </div>
+              <h3>BYOK AI Research Assistant</h3>
+              <p>
+                Bring Your Own Key support for OpenAI (GPT-4o), Anthropic (Claude 3.5), and Google Gemini. Encrypted at rest with AES-256-GCM for inline drafting and LaTeX formula assistance.
+              </p>
+              <div className="bentoBadgeRow">
+                <span className="bentoPill">Claude 3.5 Sonnet</span>
+                <span className="bentoPill">GPT-4o</span>
+                <span className="bentoPill">Gemini 1.5 Pro</span>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        {/* Self-Hosting Terminal Section */}
+        <section className="landingSelfHostSection" id="self-hosting">
+          <div className="landingSelfHostBox">
+            <div className="landingSelfHostContent">
+              <div className="landingPill">
+                <Terminal style={{ width: 14, height: 14 }} />
+                <span>Deploy in 10 Seconds</span>
+              </div>
+              <h2>Run on Your Own Infrastructure</h2>
+              <p>
+                Typstr is 100% open-source under the AGPLv3 license. Deploy with a single Docker Compose command on any Linux VM or Kubernetes cluster.
+              </p>
+              <ul className="landingCheckList">
+                <li><Check style={{ width: 16, height: 16, color: 'var(--success)' }} /> Zero telemetry or external cloud dependencies</li>
+                <li><Check style={{ width: 16, height: 16, color: 'var(--success)' }} /> Configurable local storage & backup directories</li>
+                <li><Check style={{ width: 16, height: 16, color: 'var(--success)' }} /> Pre-configured OpenLDAP & PostgreSQL services</li>
+              </ul>
+            </div>
+
+            <div className="landingTerminalSnippet">
+              <div className="landingTerminalBar">
+                <span className="mockupDot dotRed" />
+                <span className="mockupDot dotYellow" />
+                <span className="mockupDot dotGreen" />
+                <span className="landingTerminalTitle">bash</span>
+                <button className="landingCopyBtn" onClick={handleCopyCommand} title="Copy command">
+                  {copiedCmd ? <Check style={{ width: 14, height: 14 }} /> : <Copy style={{ width: 14, height: 14 }} />}
+                  <span>{copiedCmd ? 'Copied!' : 'Copy'}</span>
+                </button>
+              </div>
+              <pre className="landingTerminalCode">
+                <code>
+                  <span className="termComment"># 1. Clone & start full stack</span>{'\n'}
+                  git clone https://github.com/ARLEONTR/typstr.git{'\n'}
+                  cd typstr{'\n\n'}
+                  <span className="termComment"># 2. Launch with hot reloading & LDAP</span>{'\n'}
+                  docker compose -f docker-compose.yml -f docker-compose.dev.yml up --build
+                </code>
+              </pre>
+            </div>
+          </div>
+        </section>
+      </main>
+
+      {/* Footer */}
+      <footer className="landingFooter">
+        <div className="landingFooterContent">
+          <div className="landingFooterBrand">
+            <div className="landingNavBrand">
+              <img src="/logo.svg" alt="Typstr" className="landingNavLogo" />
+              <span className="landingNavTitle">TYPSTR</span>
+            </div>
+            <p className="landingFooterTagline">
+              The modern open-source collaborative studio for Typst & LaTeX.
+            </p>
+          </div>
+
+          <div className="landingFooterLinks">
+            <div className="landingFooterCol">
+              <h4>Platform</h4>
+              <a href="#features">Features</a>
+              <a href="#self-hosting">Self-Hosting</a>
+              <a href="https://typs.tr" target="_blank" rel="noopener noreferrer">Cloud App (typs.tr)</a>
+            </div>
+
+            <div className="landingFooterCol">
+              <h4>Open Source</h4>
+              <a href="https://github.com/ARLEONTR/typstr" target="_blank" rel="noopener noreferrer">GitHub Repository</a>
+              <a href="https://github.com/ARLEONTR/typstr/blob/main/LICENSE" target="_blank" rel="noopener noreferrer">AGPLv3 License</a>
+              <a href="https://github.com/ARLEONTR/typstr/blob/main/CONTRIBUTING.md" target="_blank" rel="noopener noreferrer">Contributing</a>
+            </div>
+
+            <div className="landingFooterCol">
+              <h4>Legal</h4>
+              <Link to="/privacy">Privacy Policy</Link>
+              <Link to="/terms">Terms of Service</Link>
+            </div>
+          </div>
         </div>
 
-        <h1>An agentic, end-to-end encrypted research buddy.</h1>
-        <p></p>
-        <p>
-          Edit your LaTeX or Typst documents saved on your own Drive or server collaboratively.
-        </p>
-
-        <div className="loginButtonGroup">
-          {providers.google ? (
-            <button className="googleButton" onClick={login}>
-              <span className="googleButtonMark" aria-hidden>
-                <svg viewBox="0 0 24 24" focusable="false">
-                  <path fill="#EA4335" d="M12 10.2v3.9h5.4c-.2 1.3-1.6 3.9-5.4 3.9-3.2 0-5.9-2.7-5.9-6s2.7-6 5.9-6c1.8 0 3.1.8 3.8 1.4l2.6-2.5C16.8 3.5 14.6 2.6 12 2.6 6.9 2.6 2.8 6.7 2.8 11.8S6.9 21 12 21c6.1 0 9.1-4.3 9.1-6.5 0-.4 0-.8-.1-1.2H12Z"/>
-                  <path fill="#4285F4" d="M21.1 13.3c.1.4.1.8.1 1.2 0 2.2-3 6.5-9.1 6.5-5.1 0-9.2-4.1-9.2-9.2S6.9 2.6 12 2.6c2.6 0 4.8.9 6.4 2.4l-2.6 2.5c-.7-.7-2-1.4-3.8-1.4-2.8 0-5.1 1.9-5.8 4.5l-3-.2v-2C4.8 5 8.1 2.6 12 2.6c2.6 0 4.8.9 6.4 2.4 1.5 1.4 2.7 3.7 2.7 8.3Z" opacity=".001"/>
-                  <path fill="#FBBC05" d="M6.2 13.6a6.1 6.1 0 0 1 0-3.7l-3-.2v3.9l3 .1Z"/>
-                  <path fill="#34A853" d="M12 21c2.5 0 4.7-.8 6.2-2.3l-3-2.4c-.8.6-1.9 1-3.2 1-3.2 0-5.9-2.7-5.9-6 0-.4 0-.8.1-1.2l-3-.2A9.2 9.2 0 0 0 12 21Z"/>
-                </svg>
-              </span>
-              <span className="googleButtonText">
-                <span>Sign in with Google</span>
-                <small>Use your Google account and Drive workspace</small>
-              </span>
-            </button>
-          ) : null}
-
-          {providers.ldap ? (
-            <button className="ldapButton" onClick={() => setShowLdapModal(true)}>
-              <span className="ldapButtonMark" aria-hidden>
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ width: 22, height: 22 }}>
-                  <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
-                  <circle cx="9" cy="7" r="4"></circle>
-                  <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
-                  <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
-                </svg>
-              </span>
-              <span className="ldapButtonText">
-                <span>Sign in with LDAP</span>
-                <small>Active Directory / OpenLDAP Account</small>
-              </span>
-            </button>
-          ) : null}
-
-          {providers.localDev ? (
-            <button
-              className="devLoginButton"
-              onClick={() => {
-                void devLogin()
-              }}
-            >
-              Continue with Dev Login
-            </button>
-          ) : null}
+        <div className="landingFooterBottom">
+          <span>© {new Date().getFullYear()} Typstr. An open-source project by ARLEON.</span>
+          <a href="mailto:typstr@arleon.com.tr">typstr@arleon.com.tr</a>
         </div>
+      </footer>
 
-        <p className="landingLegal">
-          <Link to="/privacy">Privacy Policy</Link> · <Link to="/terms">Terms of Service</Link>
-        </p>
-      </div>
-
+      {/* LDAP Sign-in Modal */}
       {showLdapModal && (
         <div className="ldapModalOverlay" onClick={() => setShowLdapModal(false)}>
           <div className="ldapModal" onClick={(e) => e.stopPropagation()}>

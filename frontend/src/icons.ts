@@ -193,3 +193,18 @@ import _TriangleAlert from 'lucide-react/dist/esm/icons/triangle-alert.mjs'
 export const Brain: LucideIcon = _Brain
 export const Bot: LucideIcon = _Bot
 export const AlertTriangle: LucideIcon = _TriangleAlert
+
+// @ts-ignore
+import _Zap from 'lucide-react/dist/esm/icons/zap.mjs'
+// @ts-ignore
+import _Code from 'lucide-react/dist/esm/icons/code.mjs'
+// @ts-ignore
+import _Lock from 'lucide-react/dist/esm/icons/lock.mjs'
+// @ts-ignore
+import _Layers from 'lucide-react/dist/esm/icons/layers.mjs'
+
+export const Zap: LucideIcon = _Zap
+export const Code: LucideIcon = _Code
+export const Lock: LucideIcon = _Lock
+export const Layers: LucideIcon = _Layers
+
