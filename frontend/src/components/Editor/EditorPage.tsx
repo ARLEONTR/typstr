@@ -209,8 +209,8 @@ const DEFAULT_LATEX_COMPILER = (
   ?? ENABLED_LATEX_COMPILER_OPTIONS[0]?.value
   ?? 'pdflatex'
 )
-const ENABLE_TINYMIST_PREVIEW = true
-const ENABLE_AUTO_COMPILE = false
+const ENABLE_TINYMIST_PREVIEW = false
+const ENABLE_AUTO_COMPILE = true
 
 type SidebarTabKey = 'files' | 'export' | 'search' | 'outline' | 'tools' | 'bibliography' | 'nomenclature' | 'academic' | 'plots' | 'history' | 'peerReview' | 'comments' | 'sharing' | 'collaboration' | 'ecosystem' | 'log' | 'gemini' | 'settings' | 'tasks'
 type FileViewMode = 'tree' | 'list' | 'gallery'
