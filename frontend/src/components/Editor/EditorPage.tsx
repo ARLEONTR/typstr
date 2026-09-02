@@ -1933,7 +1933,7 @@ function ProjectWorkspace({
     }
 
     const documentFormat = inferProjectFormatFromFileName(activeFile.name)
-    if (documentFormat !== 'typst' && documentFormat !== 'latex') {
+    if (documentFormat !== 'latex') {
       pendingLanguageDiagnosticsRequestKeyRef.current = null
       lastLanguageDiagnosticsRequestKeyRef.current = null
       warmedLanguageSessionKeyRef.current = null
@@ -1986,7 +1986,7 @@ function ProjectWorkspace({
     }
 
     const documentFormat = inferProjectFormatFromFileName(activeFile.name)
-    if (documentFormat !== 'typst' && documentFormat !== 'latex') {
+    if (documentFormat !== 'latex') {
       pendingLanguageDiagnosticsRequestKeyRef.current = null
       lastLanguageDiagnosticsRequestKeyRef.current = null
       setLanguageDiagnostics([])
