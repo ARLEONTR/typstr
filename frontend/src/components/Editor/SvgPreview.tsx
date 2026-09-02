@@ -202,7 +202,6 @@ export default function SvgPreview({
 
   return (
     <div className={styles.container}>
-      {isCompiling && <div className={styles.compilingBanner}>Compiling…</div>}
       <div className={styles.previewToolbar}>
         <div className={styles.toolbarGroup}>
           <button type="button" className={styles.toolbarBtn} onClick={handleZoomOut} aria-label="Zoom out">-</button>

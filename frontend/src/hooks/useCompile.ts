@@ -520,6 +520,27 @@ export function useCompile(options: UseCompileOptions = {}) {
             } catch (wasmError: unknown) {
               if (isFatalTypstWasmError(wasmError)) {
                 resetTypstWasmState()
+                try {
+                  const retryResult = await compileTypstWasm(nextRequest.source, entryPath, files)
+                  if (signal.aborted) {
+                    if (queuedRequestRef.current) continue
+                    return
+                  }
+                  latestCompletedKeyRef.current = nextRequestKey
+                  setCompileDiagnostics([])
+                  setCompileNotice('Compiled locally via Typst WebAssembly.')
+                  setCompileLog(null)
+                  setEffectivePreviewFormat('svg')
+                  onSuccessRef.current?.()
+                  setWebPreviewHtml(null)
+                  replacePdfUrl(null)
+                  setPages(retryResult.pages)
+                  setPageCount(retryResult.pageCount)
+                  setPageOffset(retryResult.pageOffset)
+                  continue
+                } catch {
+                  // Fall through to server fallback
+                }
               }
               if (!ENABLE_TYPST_SERVER_FALLBACK) {
                 throw wasmError

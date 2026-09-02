@@ -6570,12 +6570,12 @@ function ProjectWorkspace({
         </div>
       ) : null}
 
-      {blockingTaskMessage || fileLoadingMessage || isCompiling ? (
+      {blockingTaskMessage || fileLoadingMessage ? (
         <div className={styles.busyOverlay} role="alert" aria-live="assertive" aria-busy="true">
           <div className={styles.busyCard}>
             <div className={styles.busySpinner} aria-hidden="true" />
-            <strong>{blockingTaskMessage ?? fileLoadingMessage ?? 'Compiling…'}</strong>
-            <span>{blockingTaskMessage ? 'Please wait until this task finishes.' : isCompiling ? 'Building your document preview.' : 'Preparing the selected file…'}</span>
+            <strong>{blockingTaskMessage ?? fileLoadingMessage}</strong>
+            <span>{blockingTaskMessage ? 'Please wait until this task finishes.' : 'Preparing the selected file…'}</span>
           </div>
         </div>
       ) : null}

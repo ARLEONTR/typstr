@@ -261,6 +261,10 @@ export function isFatalTypstWasmError(error: unknown): boolean {
     || haystack.includes('browser.rs:')
     || haystack.includes('recursive use of an object detected')
     || haystack.includes('unsafe aliasing in rust')
+    || haystack.includes('memory access out of bounds')
+    || haystack.includes('out of bounds')
+    || haystack.includes('RuntimeError')
+    || haystack.includes('unreachable')
 }
 
 export function resetTypstWasmState(): void {
@@ -629,17 +633,17 @@ async function renderVectorArtifactToSvgPages(artifactContent: Uint8Array): Prom
       return []
     }
 
-    const pages = await Promise.all(
-      pageInfos.map((page) =>
-        activeRenderer.renderSvg({
-          renderSession: session,
-          window: {
-            lo: { x: 0, y: page.pageOffset },
-            hi: { x: page.width, y: page.pageOffset + page.height },
-          },
-        }),
-      ),
-    )
+    const pages: string[] = []
+    for (const page of pageInfos) {
+      const svg = await activeRenderer.renderSvg({
+        renderSession: session,
+        window: {
+          lo: { x: 0, y: page.pageOffset },
+          hi: { x: page.width, y: page.pageOffset + page.height },
+        },
+      })
+      pages.push(svg)
+    }
 
     return normalizeSvgPages(pages)
   } finally {
@@ -648,7 +652,7 @@ async function renderVectorArtifactToSvgPages(artifactContent: Uint8Array): Prom
 }
 
 function runExclusive<T>(task: () => Promise<T>): Promise<T> {
-  const next = compileChain.then(task, task)
+  const next = compileChain.then(() => task(), () => task())
   compileChain = next.catch(() => undefined)
   return next
 }
