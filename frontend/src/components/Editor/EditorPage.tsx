@@ -825,12 +825,30 @@ function ProjectWorkspace({
     if (isSavingToDrive) return 'Saving document…'
     return null
   }, [isConvertingProjectFormat, isCreatingCheckpoint, isExporting, isSavingToDrive, restoringRevisionId])
+
+  const [activeEditorSource, setActiveEditorSource] = useState(() => isEditableTextFile(activeFile) ? ytext.toString() : '')
+  useEffect(() => {
+    setActiveEditorSource(isEditableTextFile(activeFile) ? (ytext.toString() || projectSearchIndex[activeFile.id] || '') : '')
+  }, [activeFile.id, activeFile.mimeType, projectSearchIndex, synced, ytext])
+
+  useEffect(() => {
+    const handleYtextChange = () => {
+      if (isEditableTextFile(activeFile)) {
+        setActiveEditorSource(ytext.toString())
+      }
+    }
+    ytext.observe(handleYtextChange)
+    return () => {
+      ytext.unobserve(handleYtextChange)
+    }
+  }, [activeFile, ytext])
+
   const compileTargetSource = useMemo(() => {
     if (compileTargetFile.id === activeFile.id) {
-      return ytext.toString()
+      return activeEditorSource || ytext.toString()
     }
     return projectSearchIndex[compileTargetFile.id] || ''
-  }, [activeFile.id, compileTargetFile.id, projectSearchIndex, ytext])
+  }, [activeEditorSource, activeFile.id, compileTargetFile.id, projectSearchIndex, ytext])
   const isPdfAsset = isPdfFile(activeFile)
   const saveStatus = isSavingToDrive ? 'saving' : collaborativeSaveStatus
   const dirtyFileId = saveStatus === 'saved' ? null : activeFile.id
@@ -1727,10 +1745,6 @@ function ProjectWorkspace({
     [activeFile],
   )
   const assistFiles = useMemo(() => project.files.map((file) => ({ path: file.path, mimeType: file.mimeType })), [project.files])
-  const [activeEditorSource, setActiveEditorSource] = useState(() => isEditableTextFile(activeFile) ? ytext.toString() : '')
-  useEffect(() => {
-    setActiveEditorSource(isEditableTextFile(activeFile) ? (ytext.toString() || projectSearchIndex[activeFile.id] || '') : '')
-  }, [activeFile.id, activeFile.mimeType, projectSearchIndex, synced, ytext])
   const activeSource = isEditableTextFile(activeFile) ? activeEditorSource : ''
   const activePendingAiEdits = useMemo(
     () => pendingAiEdits.filter((edit) => edit.fileId === activeFile.id),
@@ -2315,7 +2329,7 @@ function ProjectWorkspace({
     compileNow(compileTargetSource, compileContextWithActiveSource(activeSource))
   }, [activeLatexCompiler, activeSource, canRender, compileContextWithActiveSource, compileNow, compileTargetFile.id, compileTargetSource, previewMode, shouldUseTinymistWebPreview])
 
-  const TYPST_AUTO_COMPILE_DEBOUNCE_MS = 50
+  const TYPST_AUTO_COMPILE_DEBOUNCE_MS = 25
   const LATEX_AUTO_COMPILE_DEBOUNCE_MS = 600
 
   useEffect(() => {
