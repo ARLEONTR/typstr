@@ -252,6 +252,7 @@ export default function CodeMirrorEditor({
   const suggestionTimeoutRef = useRef<any>(null)
   const hoverTooltipFrameRef = useRef<number | null>(null)
   const awarenessCursorTimerRef = useRef<number | null>(null)
+  const signatureTooltipTimerRef = useRef<number | null>(null)
 
   useEffect(() => { isCoAuthorEnabledRef.current = isCoAuthorEnabled }, [isCoAuthorEnabled])
   useEffect(() => { onCompileRef.current = onCompile }, [onCompile])
@@ -640,7 +641,20 @@ export default function CodeMirrorEditor({
               column: head - line.from + 1,
             })
             onSelectionRangeChangeRef.current?.(selectionToCommentAnchor(update.state))
-            setSignatureTooltipState(computeSignatureTooltip(update.view, assistDataRef.current.docLookup, wrapperRef.current))
+            if (signatureTooltipTimerRef.current !== null) {
+              window.clearTimeout(signatureTooltipTimerRef.current)
+            }
+            signatureTooltipTimerRef.current = window.setTimeout(() => {
+              signatureTooltipTimerRef.current = null
+              const nextTip = computeSignatureTooltip(update.view, assistDataRef.current.docLookup, wrapperRef.current)
+              setSignatureTooltipState((prev) => {
+                if (!prev && !nextTip) return prev
+                if (prev && nextTip && prev.entry.label === nextTip.entry.label && prev.activeParameter === nextTip.activeParameter) {
+                  return prev
+                }
+                return nextTip
+              })
+            }, 150)
 
             // Cite-search popup trigger
             if (onCiteSearchRef.current || onCiteSearchCloseRef.current) {

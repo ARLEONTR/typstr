@@ -98,9 +98,21 @@ export async function getTypstCompiler() {
   await builder.set_access_model(
     { virtualFiles },
     () => Date.now(),
-    (path: string) => virtualFiles.has(normalizeVirtualPath(path)),
+    (path: string) => {
+      const norm = normalizeVirtualPath(path)
+      const rel = norm.replace(/^\/+/, '')
+      return virtualFiles.has(norm) || virtualFiles.has(rel)
+    },
     (path: string) => normalizeVirtualPath(path),
-    (path: string) => virtualFiles.get(normalizeVirtualPath(path)),
+    (path: string) => {
+      const norm = normalizeVirtualPath(path)
+      const rel = norm.replace(/^\/+/, '')
+      const data = virtualFiles.get(norm) ?? virtualFiles.get(rel)
+      if (!data) {
+        throw new Error(`File not found: ${path}`)
+      }
+      return data
+    },
   )
   await builder.set_package_registry(
     { resolvedPackageRoots, resolvedPackageAliases },
@@ -438,8 +450,18 @@ function base64ToBytes(value: string): Uint8Array {
 }
 
 function normalizeVirtualPath(path: string): string {
-  const normalized = path.trim().replace(/\\/g, '/').replace(/\/+/g, '/')
-  return normalized.startsWith('/') ? normalized : `/${normalized}`
+  const clean = path.trim().replace(/\\/g, '/').replace(/\/+/g, '/')
+  const segments = clean.split('/')
+  const resolved: string[] = []
+  for (const seg of segments) {
+    if (seg === '' || seg === '.') continue
+    if (seg === '..') {
+      if (resolved.length > 0) resolved.pop()
+    } else {
+      resolved.push(seg)
+    }
+  }
+  return '/' + resolved.join('/')
 }
 
 function syncWorkspaceFiles(
