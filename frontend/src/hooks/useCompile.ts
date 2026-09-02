@@ -31,7 +31,7 @@ interface UseCompileOptions {
   onSuccess?: () => void
 }
 
-const ENABLE_TYPST_SERVER_FALLBACK = import.meta.env.VITE_ENABLE_TYPST_SERVER_FALLBACK !== 'false'
+const ENABLE_TYPST_SERVER_FALLBACK = false
 export const ENABLE_LATEX_SERVER_FALLBACK = import.meta.env.VITE_ENABLE_LATEX_SERVER_FALLBACK !== 'false'
 export const ENABLE_LATEX_WASM_PDF = import.meta.env.VITE_ENABLE_LATEX_WASM_PDF === 'true'
 
@@ -507,6 +507,7 @@ export function useCompile(options: UseCompileOptions = {}) {
               }
               latestCompletedKeyRef.current = nextRequestKey
               setCompileDiagnostics([])
+              setCompileError(null)
               setCompileNotice('Compiled locally via Typst WebAssembly.')
               setCompileLog(null)
               setEffectivePreviewFormat('svg')
@@ -528,6 +529,7 @@ export function useCompile(options: UseCompileOptions = {}) {
                   }
                   latestCompletedKeyRef.current = nextRequestKey
                   setCompileDiagnostics([])
+                  setCompileError(null)
                   setCompileNotice('Compiled locally via Typst WebAssembly.')
                   setCompileLog(null)
                   setEffectivePreviewFormat('svg')
@@ -539,11 +541,35 @@ export function useCompile(options: UseCompileOptions = {}) {
                   setPageOffset(retryResult.pageOffset)
                   continue
                 } catch {
-                  // Fall through to server fallback
+                  // Fall through to error handling
                 }
               }
               if (!ENABLE_TYPST_SERVER_FALLBACK) {
-                throw wasmError
+                const errorStr = stringifyUnknownError(wasmError)
+                const diagMatches = [...errorStr.matchAll(/message:\s*"([^"]+)"/g)]
+                const diagnostics: CompileDiagnostic[] = diagMatches.length > 0
+                  ? diagMatches.map((m) => ({
+                      level: 'error',
+                      message: m[1],
+                      filePath: entryPath,
+                      line: null,
+                      column: null,
+                      raw: errorStr,
+                    }))
+                  : [{
+                      level: 'error',
+                      message: errorStr,
+                      filePath: entryPath,
+                      line: null,
+                      column: null,
+                      raw: errorStr,
+                    }]
+
+                latestCompletedKeyRef.current = nextRequestKey
+                setCompileDiagnostics(diagnostics)
+                setCompileError(diagnostics[0]?.message || 'Typst compile error')
+                setCompileNotice(null)
+                continue
               }
               const message = stringifyUnknownError(wasmError)
               if (message) {
