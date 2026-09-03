@@ -1,7 +1,7 @@
 {
   "name": "typstr-frontend",
   "private": true,
-  "version": "0.2.39",
+  "version": "0.2.40",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -67,6 +67,7 @@
     "@myriaddreamin/typst-ts-renderer": "^0.7.0",
     "@myriaddreamin/typst-ts-web-compiler": "^0.7.0",
     "@myriaddreamin/typst.ts": "^0.7.0",
+    "@swc/core": "1.15.26",
     "pdfjs-dist": "5.4.296"
   }
 }

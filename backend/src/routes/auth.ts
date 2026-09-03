@@ -113,8 +113,11 @@ authRouter.post('/ldap/login', async (req, res, next) => {
   const usernameResult = validateString(req.body.username, { required: true, maxLength: 254, label: 'Username' })
   const passwordResult = validateString(req.body.password, { required: true, maxLength: 1000, label: 'Password' })
 
-  if (!usernameResult.valid || !passwordResult.valid) {
-    return res.status(400).json({ error: usernameResult.error || passwordResult.error || 'Username and password are required.' })
+  if (!usernameResult.valid) {
+    return res.status(400).json({ error: usernameResult.error })
+  }
+  if (!passwordResult.valid) {
+    return res.status(400).json({ error: passwordResult.error })
   }
 
   try {

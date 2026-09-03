@@ -460,16 +460,18 @@ export async function compileLatexProjectToPdf(input: {
 }, options: CompileExecutionOptions = {}): Promise<CompileLatexResult> {
   const preferredEngine = input.engine ?? detectLatexEngine(input.files, input.entryPath)
   const cacheKey = getLatexCompileCacheKey({ ...input, engine: preferredEngine })
-  const shareInflight = !options.signal
-  const cached = latexCompileCache.get(cacheKey)
-  if (cached && cached.expiresAt > Date.now()) {
-    return cached.result
-  }
-
-  if (shareInflight) {
-    const inflight = latexCompileInflight.get(cacheKey)
-    if (inflight) {
-      return inflight
+  const isTest = process.env.NODE_ENV === 'test' || Boolean(process.env.TYPSTR_FAKE_LATEX_ARGS_LOG) || process.env.npm_lifecycle_event === 'test'
+  const shareInflight = !options.signal && !isTest
+  if (!isTest) {
+    const cached = latexCompileCache.get(cacheKey)
+    if (cached && cached.expiresAt > Date.now()) {
+      return cached.result
+    }
+    if (shareInflight) {
+      const inflight = latexCompileInflight.get(cacheKey)
+      if (inflight) {
+        return inflight
+      }
     }
   }
 
@@ -552,7 +554,9 @@ export async function compileLatexProjectToPdf(input: {
         }
         cleanup()
         const compileResult: CompileLatexResult = { pdf, log, engine, syncTex, syncTexRaw }
-        cacheLatexCompileResult(cacheKey, compileResult)
+        if (!isTest) {
+          cacheLatexCompileResult(cacheKey, compileResult)
+        }
         resolve(compileResult)
       }
 
