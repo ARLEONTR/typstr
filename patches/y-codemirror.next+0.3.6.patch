@@ -1,8 +1,8 @@
 diff --git a/node_modules/y-codemirror.next/src/y-remote-selections.js b/node_modules/y-codemirror.next/src/y-remote-selections.js
-index 565ac35..0cb132e 100644
+index d838a96..c924ad1 100644
 --- a/node_modules/y-codemirror.next/src/y-remote-selections.js
 +++ b/node_modules/y-codemirror.next/src/y-remote-selections.js
-@@ -218,15 +218,7 @@ export class YRemoteSelectionsPluginValue {
+@@ -217,15 +217,7 @@ export class YRemoteSelectionsPluginValue {
              class: 'cm-ySelection'
            })
          })
@@ -19,7 +19,7 @@ index 565ac35..0cb132e 100644
          for (let i = startLine.number + 1; i < endLine.number; i++) {
            const linePos = update.view.state.doc.line(i).from
            decorations.push({
-@@ -237,6 +229,15 @@ export class YRemoteSelectionsPluginValue {
+@@ -236,6 +228,15 @@ export class YRemoteSelectionsPluginValue {
              })
            })
          }
@@ -35,7 +35,7 @@ index 565ac35..0cb132e 100644
        }
        decorations.push({
          from: head.index,
-@@ -248,6 +249,9 @@ export class YRemoteSelectionsPluginValue {
+@@ -247,6 +248,9 @@ export class YRemoteSelectionsPluginValue {
          })
        })
      })
