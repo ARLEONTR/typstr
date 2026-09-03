@@ -27,12 +27,19 @@ interface SyncTexSessionState {
 const sessions = new Map<string, SyncTexSessionState>()
 
 function getSyncTexBaseDir(): string {
-  const root = env.compileTmpdir || tmpdir()
-  const baseDir = path.join(root, 'typstr-synctex-sessions')
+  if (env.compileTmpdir) {
+    const configuredDir = path.join(env.compileTmpdir, 'typstr-synctex-sessions')
+    try {
+      mkdirSync(configuredDir, { recursive: true })
+      return configuredDir
+    } catch {}
+  }
+
+  const fallbackDir = path.join(tmpdir(), 'typstr-synctex-sessions')
   try {
-    mkdirSync(baseDir, { recursive: true })
+    mkdirSync(fallbackDir, { recursive: true })
   } catch {}
-  return baseDir
+  return fallbackDir
 }
 
 export interface CreateSyncTexSessionInput {
