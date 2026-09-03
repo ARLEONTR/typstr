@@ -1,9 +1,15 @@
 import { Router } from 'express'
+import { LRUCache } from 'lru-cache'
 import path from 'node:path'
 import multer from 'multer'
 import sharp from 'sharp'
 import JSZip from 'jszip'
 import * as Y from 'yjs'
+
+const ecosystemCache = new LRUCache<string, ProjectEcosystemState>({
+  max: 100,
+  ttl: 1000 * 30, // 30 seconds
+})
 import {
   canAccessProject,
   countProjectFiles,
@@ -2069,7 +2075,14 @@ projectsRouter.get('/:projectId/files/:fileId/content', async (req, res, next) =
       return res.status(404).json({ error: 'File not found' })
     }
 
+    const etag = `"${file.id}:${file.updatedAt}"`
+    if (req.headers['if-none-match'] === etag) {
+      return res.status(304).end()
+    }
+
     const content = await readFileBufferFromDrive(file.ownerUserId, file.driveFileId)
+    res.setHeader('ETag', etag)
+    res.setHeader('Cache-Control', 'private, max-age=60, must-revalidate')
     res.setHeader('Content-Type', file.mimeType || 'application/octet-stream')
     res.setHeader('Content-Disposition', `${req.query.download === '1' ? 'attachment' : 'inline'}; filename="${encodeURIComponent(file.name)}"`)
     res.send(content)
@@ -3698,6 +3711,13 @@ async function validateMoveTarget(file: ProjectFile, nextPath: string): Promise<
 }
 
 async function buildProjectEcosystemState(projectId: string, userId: string): Promise<ProjectEcosystemState> {
+  const revisionId = getProjectWorkspaceRevisionId(projectId)
+  const cacheKey = `${projectId}:${userId}:${revisionId}`
+  const cached = ecosystemCache.get(cacheKey)
+  if (cached) {
+    return cached
+  }
+
   const project = await getProjectById(projectId)
   if (!project) {
     throw new Error('Project not found')
@@ -3732,7 +3752,7 @@ async function buildProjectEcosystemState(projectId: string, userId: string): Pr
     metadataFiles: metadataFileContent,
   })
 
-  return {
+  const state: ProjectEcosystemState = {
     settings,
     packageCatalog: TYPOGRAPHY_PACKAGE_CATALOG,
     projectFonts: listProjectFonts(files),
@@ -3749,6 +3769,9 @@ async function buildProjectEcosystemState(projectId: string, userId: string): Pr
       ...collectDuplicateCitationIssues(citations),
     ],
   }
+
+  ecosystemCache.set(cacheKey, state)
+  return state
 }
 
 function extractDoi(input: string): string | null {

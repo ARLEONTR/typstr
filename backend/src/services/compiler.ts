@@ -134,6 +134,7 @@ interface PersistentWorkspaceState {
 }
 
 const persistentWorkspaces = new Map<string, PersistentWorkspaceState>()
+const persistentLatexWorkspaces = new Map<string, PersistentWorkspaceState>()
 const WORKSPACE_TTL_MS = 10 * 60 * 1_000
 
 setInterval(() => {
@@ -144,6 +145,12 @@ setInterval(() => {
       persistentWorkspaces.delete(sessionId)
     }
   }
+  for (const [sessionId, state] of persistentLatexWorkspaces) {
+    if (now - state.lastUsedAt > WORKSPACE_TTL_MS) {
+      rmSync(state.dir, { recursive: true, force: true })
+      persistentLatexWorkspaces.delete(sessionId)
+    }
+  }
 }, 5 * 60 * 1_000).unref()
 
 export function cleanupPersistentWorkspace(previewSessionId: string): void {
@@ -151,6 +158,11 @@ export function cleanupPersistentWorkspace(previewSessionId: string): void {
   if (state) {
     rmSync(state.dir, { recursive: true, force: true })
     persistentWorkspaces.delete(previewSessionId)
+  }
+  const latexState = persistentLatexWorkspaces.get(previewSessionId)
+  if (latexState) {
+    rmSync(latexState.dir, { recursive: true, force: true })
+    persistentLatexWorkspaces.delete(previewSessionId)
   }
 }
 
@@ -469,10 +481,29 @@ export async function compileLatexProjectToPdf(input: {
       return reject(new Error('Compile cancelled'))
     }
 
-    const tmpDir = mkdtempSync(path.join(getBaseCompileDir(), 'typstr-latex-'))
+    const previewSessionId = options.previewSessionId
+    let workDir: string
+    let isPersistent = false
+
+    if (previewSessionId) {
+      let state = persistentLatexWorkspaces.get(previewSessionId)
+      if (!state) {
+        const dir = mkdtempSync(path.join(getBaseCompileDir(), 'typstr-latex-ws-'))
+        state = { dir, fileContentRefs: new Map(), lastUsedAt: Date.now() }
+        persistentLatexWorkspaces.set(previewSessionId, state)
+      } else {
+        state.lastUsedAt = Date.now()
+      }
+      updatePersistentWorkspace(state, input.files)
+      workDir = state.dir
+      isPersistent = true
+    } else {
+      workDir = mkdtempSync(path.join(getBaseCompileDir(), 'typstr-latex-'))
+      writeWorkspaceFiles(workDir, input.files)
+    }
+
     try {
-      writeWorkspaceFiles(tmpDir, input.files)
-      const inputFile = resolveWorkspacePath(tmpDir, input.entryPath)
+      const inputFile = resolveWorkspacePath(workDir, input.entryPath)
       const latexWorkDir = path.dirname(inputFile)
       const inputFileName = path.basename(inputFile)
       const outputFile = path.join(latexWorkDir, inputFileName.replace(/\.[^.]+$/, '') + '.pdf')
@@ -487,7 +518,9 @@ export async function compileLatexProjectToPdf(input: {
 
       const cleanup = () => {
         signal?.removeEventListener('abort', onAbort)
-        rmSync(tmpDir, { recursive: true, force: true })
+        if (!isPersistent) {
+          rmSync(workDir, { recursive: true, force: true })
+        }
       }
 
       onAbort = () => {
@@ -638,7 +671,9 @@ export async function compileLatexProjectToPdf(input: {
 
       runEngineAt(0)
     } catch (err) {
-      rmSync(tmpDir, { recursive: true, force: true })
+      if (!isPersistent) {
+        rmSync(workDir, { recursive: true, force: true })
+      }
       reject(err)
     }
   }))

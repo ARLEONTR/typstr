@@ -5,8 +5,20 @@ import { Readable } from 'node:stream'
 import { google, type drive_v3 } from 'googleapis'
 import * as Y from 'yjs'
 import { findUserById, getProjectByDriveFolderId, getProjectFileByStorageId, updateProjectDriveFolderId, updateUserDriveRootFolder } from '../db.js'
+import { LRUCache } from 'lru-cache'
 import { env } from '../env.js'
 import type { ProjectRole, UserRecord } from '../types.js'
+
+const driveFileBufferCache = new LRUCache<string, Buffer>({
+  max: 300,
+  maxSize: 64 * 1024 * 1024,
+  sizeCalculation: (val) => val.length,
+  ttl: 1000 * 60 * 30, // 30 minutes
+})
+
+export function invalidateDriveFileCache(fileId: string): void {
+  driveFileBufferCache.delete(fileId)
+}
 
 export const DRIVE_FOLDER_MIME_TYPE = 'application/vnd.google-apps.folder'
 export const GOOGLE_DOC_MIME_TYPE = 'application/vnd.google-apps.document'
@@ -430,6 +442,7 @@ export async function moveDriveItem(input: {
 }
 
 export async function deleteDriveItem(userId: string, fileId: string): Promise<void> {
+  driveFileBufferCache.delete(fileId)
   if (await shouldUseLocalFileStorage(userId)) {
     const item = await getProjectFileByStorageId(fileId)
     if (item) {
@@ -628,34 +641,43 @@ export async function readTextFileFromDrive(userId: string, fileId: string): Pro
 type DriveAccessError = Error & { code?: string; status?: number }
 
 export async function readFileBufferFromDrive(userId: string, fileId: string): Promise<Buffer> {
+  const cached = driveFileBufferCache.get(fileId)
+  if (cached) {
+    return cached
+  }
+
+  let buffer: Buffer
   if (await shouldUseLocalFileStorage(userId)) {
     const item = await getProjectFileByStorageId(fileId)
     if (!item) {
       try {
-        return await readLocalFileBuffer(fileId)
+        buffer = await readLocalFileBuffer(fileId)
       } catch (error) {
         throw mapMissingLocalFileError(error, fileId)
       }
-    }
+    } else {
+      const targetPath = path.join(item.projectDriveFolderId, item.path)
+      try {
+        buffer = await readLocalFileBuffer(targetPath)
+      } catch (error) {
+        if (!isMissingLocalFileError(error) || !item.collaborationState || !isTextLikeFile(item.path, item.mimeType)) {
+          throw mapMissingLocalFileError(error, item.path)
+        }
 
-    const targetPath = path.join(item.projectDriveFolderId, item.path)
-    try {
-      return await readLocalFileBuffer(targetPath)
-    } catch (error) {
-      if (!isMissingLocalFileError(error) || !item.collaborationState || !isTextLikeFile(item.path, item.mimeType)) {
-        throw mapMissingLocalFileError(error, item.path)
+        const content = decodeCollaborationState(item.collaborationState)
+        await mkdir(path.dirname(targetPath), { recursive: true })
+        await writeFile(targetPath, content, 'utf8')
+        buffer = Buffer.from(content, 'utf8')
       }
-
-      const content = decodeCollaborationState(item.collaborationState)
-      await mkdir(path.dirname(targetPath), { recursive: true })
-      await writeFile(targetPath, content, 'utf8')
-      return Buffer.from(content, 'utf8')
     }
+  } else {
+    const drive = getDrive(await requireUser(userId))
+    const response = await drive.files.get({ fileId, alt: 'media' }, { responseType: 'arraybuffer' })
+    buffer = Buffer.from(response.data as ArrayBuffer)
   }
 
-  const drive = getDrive(await requireUser(userId))
-  const response = await drive.files.get({ fileId, alt: 'media' }, { responseType: 'arraybuffer' })
-  return Buffer.from(response.data as ArrayBuffer)
+  driveFileBufferCache.set(fileId, buffer)
+  return buffer
 }
 
 function isMissingLocalFileError(error: unknown): boolean {
@@ -707,6 +729,7 @@ async function readLocalFileBuffer(targetPath: string): Promise<Buffer> {
 }
 
 export async function writeTextFileToDrive(userId: string, fileId: string, content: string): Promise<void> {
+  driveFileBufferCache.set(fileId, Buffer.from(content, 'utf8'))
   if (await shouldUseLocalFileStorage(userId)) {
     const item = await getProjectFileByStorageId(fileId)
     if (!item) {

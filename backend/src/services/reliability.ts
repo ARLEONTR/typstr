@@ -949,7 +949,7 @@ async function executeCompileJobWithSignal(payload: CompilePayload, compileSigna
         entryPath,
         files: [{ path: entryPath, content: payload.source }],
         engine: payload.latexEngine,
-      }, { signal: compileSignal, timeoutMs: payload.compileTimeoutMs })
+      }, { signal: compileSignal, timeoutMs: payload.compileTimeoutMs, previewSessionId: payload.previewSessionId, projectId: payload.projectId })
       const syncTexToken = syncTexRaw
         ? createSyncTexSession({ userId: payload.userId, entryPath, pdfBuffer: pdf, syncTexBuffer: syncTexRaw })
         : undefined
@@ -1009,7 +1009,7 @@ async function executeCompileJobWithSignal(payload: CompilePayload, compileSigna
       entryPath: workspace.entryPath,
       files: workspace.files,
       engine: payload.latexEngine,
-    }, { signal: compileSignal, timeoutMs: payload.compileTimeoutMs })
+    }, { signal: compileSignal, timeoutMs: payload.compileTimeoutMs, previewSessionId: payload.previewSessionId, projectId: payload.projectId })
 
     await logProjectActivity({
       projectId: activeFile.projectId,
