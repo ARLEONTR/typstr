@@ -18,6 +18,11 @@ const COMPILE_CACHE_MAX_ENTRIES = parseInt(process.env.COMPILE_CACHE_MAX_ENTRIES
 const svgCompileCache = new Map<string, { expiresAt: number; result: CompileResult }>()
 const svgCompileInflight = new Map<string, Promise<CompileResult>>()
 
+const LATEX_COMPILE_CACHE_TTL_MS = 30_000
+const LATEX_COMPILE_CACHE_MAX_ENTRIES = 50
+const latexCompileCache = new Map<string, { expiresAt: number; result: CompileLatexResult }>()
+const latexCompileInflight = new Map<string, Promise<CompileLatexResult>>()
+
 // Cache SHA256 hashes for Buffer objects by reference — avoids re-hashing
 // binary assets (fonts, images) that haven't changed between compiles.
 const bufferHashCache = new WeakMap<Buffer, string>()
@@ -58,6 +63,61 @@ function cacheSvgCompileResult(cacheKey: string, result: CompileResult): void {
     if (!oldestKey) break
     svgCompileCache.delete(oldestKey)
   }
+}
+
+function cacheLatexCompileResult(cacheKey: string, result: CompileLatexResult): void {
+  const now = Date.now()
+  for (const [key, entry] of latexCompileCache) {
+    if (entry.expiresAt <= now) {
+      latexCompileCache.delete(key)
+    }
+  }
+
+  latexCompileCache.set(cacheKey, { expiresAt: now + LATEX_COMPILE_CACHE_TTL_MS, result })
+  while (latexCompileCache.size > LATEX_COMPILE_CACHE_MAX_ENTRIES) {
+    const oldestKey = latexCompileCache.keys().next().value
+    if (!oldestKey) break
+    latexCompileCache.delete(oldestKey)
+  }
+}
+
+function getLatexCompileCacheKey(input: {
+  entryPath: string
+  files: CompileWorkspaceFile[]
+  engine?: LatexEngine
+}): string {
+  const hash = createHash('sha256')
+  hash.update(input.entryPath)
+  hash.update(input.engine ?? 'auto')
+  const sortedFiles = [...input.files].sort((a, b) => a.path.localeCompare(b.path))
+  for (const file of sortedFiles) {
+    hash.update(file.path)
+    if (typeof file.content === 'string') {
+      hash.update(file.content)
+    } else {
+      let bufHash = bufferHashCache.get(file.content)
+      if (!bufHash) {
+        bufHash = createHash('sha256').update(file.content).digest('hex')
+        bufferHashCache.set(file.content, bufHash)
+      }
+      hash.update(bufHash)
+    }
+  }
+  return hash.digest('hex')
+}
+
+function detectLatexEngine(files: CompileWorkspaceFile[], entryPath: string): LatexEngine {
+  const normalizedEntryPath = normalizeDependencyPath(entryPath)
+  const entryFile = files.find((file) => normalizeDependencyPath(file.path) === normalizedEntryPath)
+  if (entryFile && typeof entryFile.content === 'string') {
+    if (/\\usepackage(\[[^\]]*\])?\{(fontspec|polyglossia|unicode-math)\}/i.test(entryFile.content)) {
+      return 'xelatex'
+    }
+    if (/\\usepackage(\[[^\]]*\])?\{luacode\}/i.test(entryFile.content)) {
+      return 'lualatex'
+    }
+  }
+  return 'pdflatex'
 }
 
 export interface CompileTimings {
@@ -386,11 +446,25 @@ export async function compileLatexProjectToPdf(input: {
   files: CompileWorkspaceFile[]
   engine?: LatexEngine
 }, options: CompileExecutionOptions = {}): Promise<CompileLatexResult> {
+  const preferredEngine = input.engine ?? detectLatexEngine(input.files, input.entryPath)
+  const cacheKey = getLatexCompileCacheKey({ ...input, engine: preferredEngine })
+  const shareInflight = !options.signal
+  const cached = latexCompileCache.get(cacheKey)
+  if (cached && cached.expiresAt > Date.now()) {
+    return cached.result
+  }
+
+  if (shareInflight) {
+    const inflight = latexCompileInflight.get(cacheKey)
+    if (inflight) {
+      return inflight
+    }
+  }
+
   const signal = options.signal
-  const preferredEngine = input.engine ?? 'xelatex'
   const engineOrder = getLatexEngineOrder(preferredEngine)
 
-  return limit(() => new Promise<CompileLatexResult>((resolve, reject) => {
+  const job = limit(() => new Promise<CompileLatexResult>((resolve, reject) => {
     if (signal?.aborted) {
       return reject(new Error('Compile cancelled'))
     }
@@ -444,7 +518,9 @@ export async function compileLatexProjectToPdf(input: {
           syncTexRaw = undefined
         }
         cleanup()
-        resolve({ pdf, log, engine, syncTex, syncTexRaw })
+        const compileResult: CompileLatexResult = { pdf, log, engine, syncTex, syncTexRaw }
+        cacheLatexCompileResult(cacheKey, compileResult)
+        resolve(compileResult)
       }
 
       const runLatexWithBudget = (bin: string, args: string[]) => {
@@ -489,6 +565,10 @@ export async function compileLatexProjectToPdf(input: {
           const bibliographyCommand = selectBibliographyCommand(input.files, input.entryPath)
           if (result.exitCode !== 0) {
             errors.push(result.log || `${engine} exited with code ${result.exitCode}`)
+            if (!pathExists(outputFile)) {
+              runEngineAt(index + 1)
+              return
+            }
           }
 
           if (
@@ -562,6 +642,17 @@ export async function compileLatexProjectToPdf(input: {
       reject(err)
     }
   }))
+
+  if (shareInflight) {
+    latexCompileInflight.set(cacheKey, job)
+  }
+  try {
+    return await job
+  } finally {
+    if (shareInflight) {
+      latexCompileInflight.delete(cacheKey)
+    }
+  }
 }
 
 function getLatexEngineOrder(preferred: LatexEngine): LatexEngine[] {
@@ -743,6 +834,9 @@ function runLatexCommand(
 
     onAbort = () => {
       proc.kill('SIGTERM')
+      setTimeout(() => {
+        try { proc.kill('SIGKILL') } catch {}
+      }, 250)
       settleReject(new Error('Compile cancelled'))
     }
     signal?.addEventListener('abort', onAbort, { once: true })

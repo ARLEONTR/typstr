@@ -282,10 +282,14 @@ export function runCoalescedCompileJobAndWait(
   })
 
   if (!state.active && !state.timer) {
+    const coalesceWindow = payload.documentFormat === 'latex'
+      ? Math.max(COMPILE_COALESCE_WINDOW_MS, 600)
+      : COMPILE_COALESCE_WINDOW_MS
+
     state.timer = setTimeout(() => {
       state!.timer = null
       void flushCoalescedCompile(key, options)
-    }, COMPILE_COALESCE_WINDOW_MS)
+    }, coalesceWindow)
   }
 
   return promise

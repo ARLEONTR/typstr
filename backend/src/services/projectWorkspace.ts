@@ -169,7 +169,7 @@ function isTextLikeFile(filePath: string, mimeType: string): boolean {
     return true
   }
 
-  return /\.(typ|txt|md|json|yaml|yml|bib|csv|toml|xml|svg)$/i.test(filePath)
+  return /\.(typ|txt|md|json|yaml|yml|bib|csv|toml|xml|svg|tex|cls|sty|bst|dtx|ins|bbl|aux|tikz|ltx)$/i.test(filePath)
 }
 
 function isMissingWorkspaceFileError(error: unknown): boolean {
