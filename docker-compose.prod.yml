@@ -16,7 +16,8 @@ services:
       FRONTEND_ORIGIN: "${PROD_FRONTEND_ORIGIN:-https://typs.tr}"
       BACKEND_ORIGIN: "${PROD_BACKEND_ORIGIN:-https://typs.tr}"
       COOKIE_SECURE: "${PROD_COOKIE_SECURE:-true}"
-      TRUST_PROXY_HOPS: "${PROD_TRUST_PROXY_HOPS:-1}"
+      # caddy -> nginx -> backend
+      TRUST_PROXY_HOPS: "${PROD_TRUST_PROXY_HOPS:-2}"
       SESSION_COOKIE_DOMAIN: "${PROD_SESSION_COOKIE_DOMAIN:-typs.tr}"
       GOOGLE_CALLBACK_URL: "${PROD_GOOGLE_CALLBACK_URL:-https://typs.tr/api/auth/google/callback}"
       ORCID_CALLBACK_URL: "${PROD_ORCID_CALLBACK_URL:-https://typs.tr/api/auth/orcid/callback}"

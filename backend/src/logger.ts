@@ -32,8 +32,22 @@ function normalizeLogLevel(value: string | undefined): LogLevel {
 
 const activeLevel = normalizeLogLevel(env.logLevel)
 
-function shouldLog(level: LogLevel): boolean {
+export function shouldLog(level: LogLevel): boolean {
   return LOG_LEVEL_RANK[level] >= LOG_LEVEL_RANK[activeLevel]
+}
+
+const noop = () => {}
+
+// Older call sites and third-party libraries write to console directly; hold them to LOG_LEVEL too.
+if (!shouldLog('debug')) {
+  console.debug = noop
+}
+if (!shouldLog('info')) {
+  console.info = noop
+  console.log = noop
+}
+if (!shouldLog('warning')) {
+  console.warn = noop
 }
 
 function write(level: LogLevel, ...args: unknown[]): void {

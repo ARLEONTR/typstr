@@ -17,8 +17,9 @@ let sessionRedisClientPromise: Promise<SessionRedisClient> | null = null
 export async function initializeAuth(app: Express): Promise<void> {
   const sessionRedisClient = await getSessionRedisClient()
 
-  // Trust all proxy hops in production to ensure X-Forwarded-Proto is respected for secure cookies
-  app.set('trust proxy', env.isProduction ? true : env.trustProxyHops)
+  // Trust exactly TRUST_PROXY_HOPS proxies. `true` would trust any X-Forwarded-For entry, letting
+  // clients pick their own req.ip (rate limits, audit logs).
+  app.set('trust proxy', env.trustProxyHops)
 
   app.use(session({
     name: SESSION_COOKIE_NAME,

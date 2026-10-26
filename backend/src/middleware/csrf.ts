@@ -1,5 +1,6 @@
 import type { NextFunction, Request, Response } from 'express'
 import { env } from '../env.js'
+import { logger } from '../logger.js'
 
 const SAFE_METHODS = new Set(['GET', 'HEAD', 'OPTIONS'])
 
@@ -38,7 +39,7 @@ export function csrfProtection(req: Request, res: Response, next: NextFunction):
       return
     }
 
-    console.log('CSRF Blocked: Invalid Origin', { origin, allowed });
+    logger.warning('CSRF Blocked: Invalid Origin', { origin, allowed })
     res.status(403).json({ error: 'CSRF check failed: invalid Origin', code: 'CSRF_BLOCKED' })
     return
   }

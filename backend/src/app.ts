@@ -4,6 +4,7 @@ import helmet from 'helmet'
 import morgan from 'morgan'
 import { initializeAuth, requireAuth } from './auth.js'
 import { env } from './env.js'
+import { shouldLog } from './logger.js'
 import { authRouter } from './routes/auth.js'
 import { adminRouter } from './routes/admin.js'
 import { invitationsRouter } from './routes/invitations.js'
@@ -40,7 +41,9 @@ export async function createApp() {
   contentSecurityPolicy: false,
 }))
   app.use(cors({ origin: env.frontendOrigin, credentials: true }))
-  app.use(morgan('dev'))
+  if (shouldLog('info')) {
+    app.use(morgan('dev'))
+  }
   app.use(express.json({ limit: `${env.requestBodyLimitMb}mb` }))
   app.use(express.urlencoded({ extended: true, limit: `${env.requestBodyLimitMb}mb` }))
   // Parser for Google RISC Security Event Tokens
