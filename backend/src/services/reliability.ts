@@ -45,7 +45,7 @@ import {
   type LatexSyncTexEntry,
 } from './compiler.js'
 import { createSyncTexSession } from './syncTexSession.js'
-import { compileTypstProjectPdf, convertWithPandoc } from './exporter.js'
+import { compileTypstProjectPdf, convertTypstProjectToDocx, convertWithPandoc, isTypstDocxConverterAvailable } from './exporter.js'
 import { ecosystemIssuesToCompileDiagnostics, validateProjectWorkspace } from './ecosystem.js'
 import { loadProjectWorkspace } from './projectWorkspace.js'
 import { pingSessionRedis } from '../auth.js'
@@ -1107,6 +1107,35 @@ async function executeCompileJobWithSignal(payload: CompilePayload, compileSigna
 }
 
 
+// Whole-project Word export through the site's Typst converter; the project's
+// main file is the entry point (the open file when the main file is not Typst).
+// Falls back to pandoc on the open file if the converter fails.
+async function convertTypstProjectDocx(payload: ExportPayload): Promise<Awaited<ReturnType<typeof convertWithPandoc>>> {
+  const activeFile = await getProjectFileForUser(payload.fileId!, payload.userId)
+  if (!activeFile || activeFile.projectId !== payload.projectId) {
+    throw new Error('File not found')
+  }
+
+  const project = await getProjectById(payload.projectId)
+  const mainFile = project?.mainFileId ? await getProjectFileForUser(project.mainFileId, payload.userId) : null
+  const entryFile = mainFile && mainFile.projectId === payload.projectId && mainFile.path.endsWith('.typ') ? mainFile : activeFile
+
+  try {
+    const workspace = await loadProjectWorkspace({
+      projectId: activeFile.projectId,
+      ownerUserId: activeFile.ownerUserId,
+      entryFileId: entryFile.id,
+      entryPath: entryFile.path,
+      sourceOverride: entryFile.id === activeFile.id ? { fileId: activeFile.id, content: payload.source } : undefined,
+      additionalOverrides: entryFile.id === activeFile.id ? [] : [{ fileId: activeFile.id, content: payload.source }],
+    })
+    return await convertTypstProjectToDocx(workspace)
+  } catch (error) {
+    console.warn('[export] Typst Word converter failed, falling back to pandoc:', error instanceof Error ? error.message : error)
+    return await convertWithPandoc(payload.source, payload.format, 'typst')
+  }
+}
+
 async function executeExportJob(payload: ExportPayload): Promise<{ saved: true; name: string; driveFileId: string } | { mimeType: string; extension: string; base64: string }> {
   let exportResult: Awaited<ReturnType<typeof convertWithPandoc>>
   let activityProjectId: string | null = payload.projectId ?? null
@@ -1183,6 +1212,8 @@ async function executeExportJob(payload: ExportPayload): Promise<{ saved: true; 
     } else {
       exportResult = await convertWithPandoc(payload.source, payload.format, documentFormat)
     }
+  } else if (payload.format === 'docx' && documentFormat === 'typst' && payload.projectId && payload.fileId && isTypstDocxConverterAvailable()) {
+    exportResult = await convertTypstProjectDocx(payload)
   } else {
     exportResult = await convertWithPandoc(payload.source, payload.format, documentFormat)
   }

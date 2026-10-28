@@ -1,5 +1,6 @@
 /*
- * typstr-tex-sandbox: run one TeX tool as the unprivileged typstr-tex user.
+ * typstr-tex-sandbox: run one TeX (or document conversion) tool as the
+ * unprivileged typstr-tex user.
  *
  * TeX engines, biber and make4ht can read any file the calling user can read
  * (\input{/proc/1/environ}, \verbatiminput, Lua io.open, biber data sources).
@@ -29,6 +30,8 @@
 static const char *const allowed_programs[] = {
   "pdflatex", "xelatex", "lualatex", "latex",
   "bibtex", "biber", "makeindex", "make4ht",
+  /* optional site-installed Typst -> Word converter, see exporter.ts */
+  "typstr-docx-converter",
   NULL,
 };
 

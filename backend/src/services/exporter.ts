@@ -50,6 +50,70 @@ function stripAnsi(str: string): string {
   return str.replace(/\x1B\[[0-9;]*[mGKHF]/g, '')
 }
 
+// Optional site-provided Typst -> Word converter. When an executable with this
+// name is on PATH, DOCX exports of Typst projects use it instead of pandoc: it
+// gets the whole project (imports, templates, images), not just one file. It
+// is called as `typstr-docx-converter <entry.typ> --project-root <dir>
+// --output <file.docx>` and runs like the TeX tools (sandbox user, minimal env).
+const TYPST_DOCX_CONVERTER = 'typstr-docx-converter'
+const TYPST_DOCX_TIMEOUT_MS = 120_000
+
+export function isTypstDocxConverterAvailable(): boolean {
+  return (process.env.PATH ?? '').split(path.delimiter).some((dir) => dir && existsSync(path.join(dir, TYPST_DOCX_CONVERTER)))
+}
+
+export async function convertTypstProjectToDocx(input: {
+  entryPath: string
+  files: WorkspaceFileLike[]
+}): Promise<ExportResult> {
+  const tmpDir = mkdtempSync(path.join(tmpdir(), 'typstr-docx-'))
+  shareDirectoryWithTex(tmpDir)
+
+  try {
+    const projectDir = path.join(tmpDir, 'project')
+    mkdirSync(projectDir)
+    writeWorkspaceFiles(projectDir, input.files)
+    const entryFile = resolveWorkspacePath(projectDir, input.entryPath)
+    const outputFile = path.join(tmpDir, 'document.docx')
+    const command = texCommand(TYPST_DOCX_CONVERTER, [entryFile, '--project-root', projectDir, '--output', outputFile])
+
+    await new Promise<void>((resolve, reject) => {
+      const proc = spawn(command.command, command.args, {
+        stdio: ['ignore', 'ignore', 'pipe'],
+        env: texProcessEnv(),
+        cwd: projectDir,
+      })
+      const errChunks: Buffer[] = []
+      proc.stderr.on('data', (chunk: Buffer) => errChunks.push(chunk))
+      const timer = setTimeout(() => {
+        proc.kill('SIGKILL')
+        reject(new Error(`Word conversion timed out after ${TYPST_DOCX_TIMEOUT_MS}ms`))
+      }, TYPST_DOCX_TIMEOUT_MS)
+      proc.on('error', (err) => {
+        clearTimeout(timer)
+        reject(new Error(`Failed to start ${TYPST_DOCX_CONVERTER}: ${err.message}`))
+      })
+      proc.on('close', (code) => {
+        clearTimeout(timer)
+        if (code === 0 && existsSync(outputFile)) {
+          resolve()
+        } else {
+          const errMsg = stripAnsi(Buffer.concat(errChunks).toString('utf8')).trim()
+          reject(new Error(errMsg || `${TYPST_DOCX_CONVERTER} exited with code ${code}`))
+        }
+      })
+    })
+
+    return {
+      buffer: readFileSync(outputFile),
+      mimeType: FORMAT_MAP.docx.mime,
+      extension: FORMAT_MAP.docx.ext,
+    }
+  } finally {
+    rmSync(tmpDir, { recursive: true, force: true })
+  }
+}
+
 export async function convertWithPandoc(source: string, format: ExportFormat, sourceFormat: 'typst' | 'latex' = 'typst'): Promise<ExportResult> {
   if (format === 'pdf') {
     if (sourceFormat === 'latex') {
