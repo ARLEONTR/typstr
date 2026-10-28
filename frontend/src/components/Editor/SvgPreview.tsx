@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent, type KeyboardEvent, type MouseEvent as ReactMouseEvent } from 'react'
 import styles from './SvgPreview.module.css'
+import { sanitizePreviewSvg } from './svgSanitize'
 
 /** Parse the aspect ratio (height/width) from a typst SVG string. */
 function parseSvgAspectRatio(svg: string): number | null {
@@ -36,6 +37,8 @@ export default function SvgPreview({
   const [viewportSize, setViewportSize] = useState({ width: 0, height: 0 })
 
   const totalPageCount = Math.max(1, pageCount || pages.length)
+
+  const safePages = useMemo(() => pages.map(sanitizePreviewSvg), [pages])
 
   // Aspect ratio (height/width) from the first page SVG — assumed consistent across pages
   const pageAspectRatio = useMemo(() => {
@@ -269,7 +272,7 @@ export default function SvgPreview({
                   <div
                     className={styles.previewSvg}
                     onClick={(event) => handlePreviewClick(event, globalIdx + 1)}
-                    dangerouslySetInnerHTML={{ __html: pages[localIdx] ?? '' }}
+                    dangerouslySetInnerHTML={{ __html: safePages[localIdx] ?? '' }}
                   />
                 </div>
               </div>
