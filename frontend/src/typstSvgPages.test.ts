@@ -28,6 +28,20 @@ test('a whole-document SVG is split into one SVG per page', () => {
   assert.match(pages[1], /<path d="M1 1"\/>/)
 })
 
+test('each page only carries the glyphs it references', () => {
+  const svg = [
+    '<svg viewBox="0 0 10 20" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">',
+    '<defs class="glyph"><path id="a" d="M1 1"/><g id="b"><use xlink:href="#c"/></g><path id="c" d="M3 3"/><path id="d" d="M4 4"/></defs>',
+    '<g class="typst-page" transform="translate(0, 0)" data-page-width="10" data-page-height="10"><use xlink:href="#a"/></g>',
+    '<g class="typst-page" transform="translate(0, 10)" data-page-width="10" data-page-height="10"><use xlink:href="#b"/></g>',
+    '</svg>',
+  ].join('')
+  const [first, second] = splitTypstSvgIntoPages(svg)
+  assert.match(first, /<defs class="glyph"><path id="a" d="M1 1"\/><\/defs>/)
+  assert.match(second, /<defs class="glyph"><g id="b"><use xlink:href="#c"\/><\/g><path id="c" d="M3 3"\/><\/defs>/)
+  assert.doesNotMatch(first + second, /id="d"/)
+})
+
 test('SVG without page groups is returned unchanged', () => {
   const svg = '<svg viewBox="0 0 1 1"><path d="M0 0"/></svg>'
   assert.deepEqual(splitTypstSvgIntoPages(svg), [svg])

@@ -68,10 +68,38 @@ export function splitTypstSvgIntoPages(svg: string): string[] {
   const pages = children.filter(isPage)
   if (pages.length === 0) return [svg]
 
-  const shared = children
-    .filter((child) => !isPage(child) && !child.openTag.startsWith('<script'))
-    .map((child) => svg.slice(child.start, child.end))
-    .join('')
+  const sharedChildren = children.filter((child) => !isPage(child) && !child.openTag.startsWith('<script'))
+  const glyphDefs = sharedChildren.find((child) => /^<defs\b[^>]*\sclass="glyph"/.test(child.openTag))
+  const glyphs = new Map<string, string>()
+  if (glyphDefs) {
+    const innerStart = glyphDefs.start + glyphDefs.openTag.length
+    const innerEnd = svg.lastIndexOf('</defs>', glyphDefs.end)
+    for (const glyph of topLevelChildren(svg, innerStart, innerEnd)) {
+      const id = attribute(glyph.openTag, 'id')
+      if (id) glyphs.set(id, svg.slice(glyph.start, glyph.end))
+    }
+  }
+
+  // Every page carries the style and clip paths, but only the glyphs it
+  // references: copying all glyph definitions into every page made them
+  // about half of the preview's size.
+  const glyphsFor = (content: string): string => {
+    const used = new Set<string>()
+    const pending = [content]
+    while (pending.length > 0) {
+      for (const match of pending.pop()!.matchAll(/href="#([^"]+)"/g)) {
+        const glyph = glyphs.get(match[1])
+        if (glyph !== undefined && !used.has(match[1])) {
+          used.add(match[1])
+          pending.push(glyph)
+        }
+      }
+    }
+    return [...used].map((id) => glyphs.get(id)).join('')
+  }
+  const sharedFor = (content: string): string => sharedChildren.map((child) => (
+    child === glyphDefs ? `${glyphDefs.openTag}${glyphsFor(content)}</defs>` : svg.slice(child.start, child.end)
+  )).join('')
   const rootAttributes = rootOpen[0]
     .replace(/\s(?:viewBox|width|height|data-width|data-height)="[^"]*"/g, '')
     .replace(/^<svg\b/, '')
@@ -82,6 +110,7 @@ export function splitTypstSvgIntoPages(svg: string): string[] {
     const height = attribute(page.openTag, 'data-page-height') ?? '0'
     const offset = page.openTag.match(/transform="translate\(\s*[-\d.]+\s*,\s*([-\d.]+)\s*\)"/)?.[1] ?? '0'
     const size = `viewBox="0 0 ${width} ${height}" width="${width}" height="${height}" data-width="${width}" data-height="${height}"`
-    return `<svg ${size}${rootAttributes}>${shared}<g transform="translate(0, ${-Number(offset)})">${svg.slice(page.start, page.end)}</g></svg>`
+    const content = svg.slice(page.start, page.end)
+    return `<svg ${size}${rootAttributes}>${sharedFor(content)}<g transform="translate(0, ${-Number(offset)})">${content}</g></svg>`
   })
 }

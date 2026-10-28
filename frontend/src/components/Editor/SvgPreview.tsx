@@ -11,6 +11,11 @@ function parseSvgAspectRatio(svg: string): number | null {
   return w > 0 && h > 0 ? h / w : null
 }
 
+// Only pages this close to the visible one are put into the DOM; the rest
+// keep an empty frame of the right size. A large document otherwise holds
+// tens of thousands of SVG nodes (hundreds of MB) for pages nobody sees.
+const PAGE_RENDER_RADIUS = 2
+
 interface Props {
   pages: string[]
   pageCount: number
@@ -246,6 +251,7 @@ export default function SvgPreview({
       <div className={styles.pageViewport} ref={pageViewportRef}>
         {pages.map((_, localIdx) => {
           const globalIdx = pageOffset + localIdx
+          const isRendered = Math.abs(globalIdx - activePageIndex) <= PAGE_RENDER_RADIUS
 
           return (
             <div
@@ -272,7 +278,7 @@ export default function SvgPreview({
                   <div
                     className={styles.previewSvg}
                     onClick={(event) => handlePreviewClick(event, globalIdx + 1)}
-                    dangerouslySetInnerHTML={{ __html: safePages[localIdx] ?? '' }}
+                    dangerouslySetInnerHTML={{ __html: isRendered ? safePages[localIdx] ?? '' : '' }}
                   />
                 </div>
               </div>
