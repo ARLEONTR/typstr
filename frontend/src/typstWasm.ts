@@ -36,8 +36,13 @@ type CompilerWithPackageState = {
   _workspaceFilePaths?: Set<string>
 }
 
+type TypstCompiler = Awaited<ReturnType<TypstCompilerBuilder['build']>> & CompilerWithPackageState
+
 let isInitialized = false
-let compiler: (Awaited<ReturnType<TypstCompilerBuilder['build']>> & CompilerWithPackageState) | null = null
+// Shared by all callers so the background warm-up and an early compile never
+// build two compilers at once; concurrent builds corrupt the wasm module
+// ("attempted to take ownership of Rust value while it was borrowed").
+let compilerPromise: Promise<TypstCompiler> | null = null
 let renderer: TypstRenderer | null = null
 let compileChain: Promise<unknown> = Promise.resolve()
 const DEFAULT_FONT_FETCH_TIMEOUT_MS = Number(import.meta.env.VITE_TYPST_FONT_FETCH_TIMEOUT_MS ?? 3500) || 3500
@@ -83,9 +88,19 @@ async function ensureInitialized() {
   isInitialized = true
 }
 
-export async function getTypstCompiler() {
+export function getTypstCompiler(): Promise<TypstCompiler> {
+  if (!compilerPromise) {
+    const pending = createTypstCompiler()
+    compilerPromise = pending
+    pending.catch(() => {
+      if (compilerPromise === pending) compilerPromise = null
+    })
+  }
+  return compilerPromise
+}
+
+async function createTypstCompiler(): Promise<TypstCompiler> {
   await ensureInitialized()
-  if (compiler) return compiler
 
   const packageBundleCache = new Map<string, Promise<PackageBundleResponse>>()
   const mappedPackageRoots = new Set<string>()
@@ -122,7 +137,7 @@ export async function getTypstCompiler() {
         ?? resolvedPackageAliases.get(packageAliasKey(normalized))
     },
   )
-  compiler = await builder.build() as Awaited<ReturnType<TypstCompilerBuilder['build']>> & CompilerWithPackageState
+  const compiler = await builder.build() as TypstCompiler
   compiler._packageBundleCache = packageBundleCache
   compiler._mappedPackageRoots = mappedPackageRoots
   compiler._resolvedPackageRoots = resolvedPackageRoots
@@ -273,6 +288,7 @@ export function isFatalTypstWasmError(error: unknown): boolean {
     || haystack.includes('browser.rs:')
     || haystack.includes('recursive use of an object detected')
     || haystack.includes('unsafe aliasing in rust')
+    || haystack.includes('attempted to take ownership of Rust value')
     || haystack.includes('memory access out of bounds')
     || haystack.includes('out of bounds')
     || haystack.includes('RuntimeError')
@@ -280,7 +296,7 @@ export function isFatalTypstWasmError(error: unknown): boolean {
 }
 
 export function resetTypstWasmState(): void {
-  compiler = null
+  compilerPromise = null
   renderer = null
   isInitialized = false
   fileContentFingerprintMap.clear()
