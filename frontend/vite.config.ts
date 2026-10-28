@@ -9,6 +9,12 @@ const devProxyWsTarget = process.env.VITE_DEV_PROXY_WS_TARGET ?? devProxyTarget.
 export default defineConfig({
   assetsInclude: ['**/*.wasm'],
   plugins: [wasm(), topLevelAwait(), react()],
+  // The Typst compiler worker loads its WebAssembly packages with dynamic
+  // imports, which need an ES module worker.
+  worker: {
+    format: 'es',
+    plugins: () => [wasm(), topLevelAwait()],
+  },
   optimizeDeps: {
     exclude: ['@myriaddreamin/typst-ts-web-compiler'],
     // Rolldown's tree-shaking breaks Lucide's deep re-export chain, so icons

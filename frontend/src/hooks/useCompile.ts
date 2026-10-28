@@ -2,7 +2,7 @@ import { useState, useCallback, useRef, useEffect } from 'react'
 import { apiClient } from '../api/client'
 import type { CompileDiagnostic, CompilePreviewFormat, CompileResponse, LatexSyncTexEntry } from '../types'
 import { compileLatexWasmToPdf, isBusytexRunnerReady, warmBusytexAssetsInBackground } from '../latexWasm'
-import { compileTypstWasm, compileTypstWasmToPdf, isFatalTypstWasmError, resetTypstWasmState } from '../typstWasm'
+import { compileTypstWasm, compileTypstWasmToPdf, isFatalTypstWasmError, resetTypstWasmState } from '../typstWasmClient'
 import type { LatexEngine } from '../latexWasm'
 
 export type LatexWebPreviewEngine = 'pandoc-wasm' | 'make4ht' | 'pandoc'

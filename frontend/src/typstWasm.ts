@@ -7,6 +7,8 @@ import liberationSansBoldUrl from 'pdfjs-dist/standard_fonts/LiberationSans-Bold
 import liberationSansItalicUrl from 'pdfjs-dist/standard_fonts/LiberationSans-Italic.ttf?url'
 import liberationSansBoldItalicUrl from 'pdfjs-dist/standard_fonts/LiberationSans-BoldItalic.ttf?url'
 import { apiClient } from './api/client'
+import { isFatalTypstWasmError } from './typstWasmErrors'
+import { splitTypstSvgIntoPages } from './typstSvgPages'
 
 type ProjectFileEntry = { path: string; content: string | Uint8Array }
 type PackageSpec = { namespace: string; name: string; version: string }
@@ -179,7 +181,7 @@ async function loadDefaultFonts(builder: TypstCompilerBuilder): Promise<void> {
 
 async function fetchFontBytes(url: string, timeoutMs = DEFAULT_FONT_FETCH_TIMEOUT_MS): Promise<Uint8Array> {
   const controller = new AbortController()
-  const timeout = window.setTimeout(() => controller.abort(), timeoutMs)
+  const timeout = setTimeout(() => controller.abort(), timeoutMs)
   try {
     const response = await fetch(url, { cache: 'force-cache', signal: controller.signal })
     if (!response.ok) {
@@ -187,7 +189,7 @@ async function fetchFontBytes(url: string, timeoutMs = DEFAULT_FONT_FETCH_TIMEOU
     }
     return new Uint8Array(await response.arrayBuffer())
   } finally {
-    window.clearTimeout(timeout)
+    clearTimeout(timeout)
   }
 }
 
@@ -199,10 +201,6 @@ export function warmTypstWasmInBackground(): void {
   void getTypstCompiler().catch(() => undefined)
 }
 
-// Auto-warm compiler in background
-if (typeof window !== 'undefined') {
-  setTimeout(() => warmTypstWasmInBackground(), 100)
-}
 
 export async function compileTypstWasm(
   source: string,
@@ -276,24 +274,7 @@ export async function compileTypstWasmToPdf(
   })
 }
 
-export function isFatalTypstWasmError(error: unknown): boolean {
-  const message = error instanceof Error ? error.message : String(error ?? '')
-  const stack = error instanceof Error ? error.stack ?? '' : ''
-  const haystack = `${message}\n${stack}`
-
-  return haystack.includes('tinymist-package')
-    || haystack.includes('Option::unwrap()')
-    || haystack.includes('called `Option::unwrap()` on a `None` value')
-    || haystack.includes('panicked at ')
-    || haystack.includes('browser.rs:')
-    || haystack.includes('recursive use of an object detected')
-    || haystack.includes('unsafe aliasing in rust')
-    || haystack.includes('attempted to take ownership of Rust value')
-    || haystack.includes('memory access out of bounds')
-    || haystack.includes('out of bounds')
-    || haystack.includes('RuntimeError')
-    || haystack.includes('unreachable')
-}
+export { isFatalTypstWasmError }
 
 export function resetTypstWasmState(): void {
   compilerPromise = null
@@ -457,7 +438,7 @@ function validatePackageBundle(bundle: PackageBundleResponse): void {
 }
 
 function base64ToBytes(value: string): Uint8Array {
-  const binary = window.atob(value)
+  const binary = atob(value)
   const bytes = new Uint8Array(binary.length)
   for (let index = 0; index < binary.length; index += 1) {
     bytes[index] = binary.charCodeAt(index)
@@ -666,24 +647,19 @@ async function renderVectorArtifactToSvgPages(artifactContent: Uint8Array): Prom
   }).createModule(artifactContent)
 
   try {
-    const pageInfos = session.retrievePagesInfo()
-    if (pageInfos.length === 0) {
+    if (session.retrievePagesInfo().length === 0) {
       return []
     }
 
-    const pages: string[] = []
-    for (const page of pageInfos) {
-      const svg = await activeRenderer.renderSvg({
-        renderSession: session,
-        window: {
-          lo: { x: 0, y: page.pageOffset },
-          hi: { x: page.width, y: page.pageOffset + page.height },
-        },
-      })
-      pages.push(svg)
-    }
+    // renderSvg always renders the whole document (it ignores `window`), so
+    // render once and split it; rendering per page made the output, and the
+    // time spent, grow with the square of the page count.
+    const svg = await activeRenderer.renderSvg({
+      renderSession: session,
+      data_selection: { body: true, defs: true, css: true, js: false },
+    })
 
-    return normalizeSvgPages(pages)
+    return normalizeSvgPages(splitTypstSvgIntoPages(svg))
   } finally {
     ;(session as RenderSession & { [Symbol.dispose]?: () => void; free?: () => void }).free?.()
   }
