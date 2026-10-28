@@ -1,3 +1,4 @@
+import { createHash, randomBytes, timingSafeEqual } from 'node:crypto'
 import type { Express, NextFunction, Request, Response } from 'express'
 import { RedisStore } from 'connect-redis'
 import session, { type CookieOptions } from 'express-session'
@@ -73,7 +74,7 @@ export async function initializeAuth(app: Express): Promise<void> {
     // store() is called by passport-oauth2 when PKCE is OFF
     store(req: Request, _state: unknown, _meta: unknown, callback: (err: Error | null, handle?: string) => void): void {
       if (!req.session) return callback(new Error('Session support required'))
-      const handle = Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2)
+      const handle = randomBytes(24).toString('base64url')
       if (!(req.session as any)[sessionKey]) (req.session as any)[sessionKey] = {}
       ;(req.session as any)[sessionKey].state = handle
       req.session.save((err) => callback(err ?? null, handle))
@@ -93,7 +94,7 @@ export async function initializeAuth(app: Express): Promise<void> {
     // store() is called by passport-oauth2 when PKCE is ON (4-arg form)
     store(req: Request, verifier: string, _state: unknown, _meta: unknown, callback: (err: Error | null, handle?: string) => void): void {
       if (!req.session) return callback(new Error('Session support required'))
-      const handle = Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2)
+      const handle = randomBytes(24).toString('base64url')
       if (!(req.session as any)[sessionKey]) (req.session as any)[sessionKey] = {}
       ;(req.session as any)[sessionKey].state = { handle, code_verifier: verifier }
       logger.debug('[OAuth PKCE store] session id:', req.session.id, 'handle:', handle)
@@ -133,6 +134,8 @@ export async function initializeAuth(app: Express): Promise<void> {
           name: profile.displayName || email,
           avatarUrl: profile.photos?.[0]?.value ?? null,
           refreshToken: refreshToken || null,
+          emailVerified: (profile.emails?.[0] as { verified?: boolean } | undefined)?.verified === true
+            || (profile._json as { email_verified?: boolean } | undefined)?.email_verified === true,
         })
 
         done(null, user)
@@ -180,11 +183,16 @@ export function getAuthenticatedUser(req: Request) {
 }
 
 export function isAdminRequestAuthorized(req: Request): boolean {
-  if (env.adminApiKey && req.header('x-admin-api-key') === env.adminApiKey) {
+  if (env.adminApiKey && safeEqual(req.header('x-admin-api-key') ?? '', env.adminApiKey)) {
     return true
   }
 
   return isAdminUser(req.user)
+}
+
+function safeEqual(provided: string, expected: string): boolean {
+  const digest = (value: string) => createHash('sha256').update(value).digest()
+  return timingSafeEqual(digest(provided), digest(expected))
 }
 
 export async function establishLocalDevSession(req: Request) {

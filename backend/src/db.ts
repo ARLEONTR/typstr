@@ -882,28 +882,32 @@ export async function upsertUserFromGoogleProfile(input: {
   name: string
   avatarUrl: string | null
   refreshToken: string | null
+  emailVerified: boolean
 }): Promise<AuthenticatedUser> {
   const now = Date.now()
   const encryptedToken = input.refreshToken ? encryptToken(input.refreshToken) : null
-  const existing = await queryOne<UserRow>(pool, `
-    SELECT *
-    FROM users
-    WHERE google_id = $1 OR LOWER(email) = LOWER($2)
-    LIMIT 1
-  `, [input.googleId, input.email])
+  // Find the account by Google identity; fall back to the email address only
+  // when Google has verified it, so an unverified address cannot take over
+  // someone else's account.
+  const existing = await queryOne<UserRow>(pool, 'SELECT * FROM users WHERE google_id = $1', [input.googleId])
+    ?? (input.emailVerified
+      ? await queryOne<UserRow>(pool, 'SELECT * FROM users WHERE LOWER(email) = LOWER($1)', [input.email])
+      : null)
 
   if (existing) {
+    // A directory (LDAP) account keeps its identity so directory sign-in keeps working.
+    const googleId = existing.google_id?.startsWith('ldap:') ? existing.google_id : input.googleId
     await pool.query(`
       UPDATE users
       SET google_id = $1,
-          email = $2,
+          email = CASE WHEN EXISTS (SELECT 1 FROM users other WHERE LOWER(other.email) = LOWER($2) AND other.id <> $7) THEN email ELSE $2 END,
           name = $3,
           avatar_url = $4,
           refresh_token = COALESCE($5, refresh_token),
           updated_at = $6
       WHERE id = $7
     `, [
-      input.googleId,
+      googleId,
       input.email,
       input.name,
       input.avatarUrl,
@@ -913,6 +917,10 @@ export async function upsertUserFromGoogleProfile(input: {
     ])
 
     return sanitizeUser((await findUserById(existing.id))!)
+  }
+
+  if (await findUserByEmail(input.email)) {
+    throw Object.assign(new Error('This email address already belongs to another account.'), { status: 409 })
   }
 
   const id = randomUUID()
@@ -1099,25 +1107,26 @@ export async function upsertLdapUser(input: {
   const name = input.name.trim() || normalizedEmail
   const googleId = `ldap:${input.ldapId}`
   const now = Date.now()
-  const existing = await queryOne<UserRow>(pool, `
-    SELECT *
-    FROM users
-    WHERE google_id = $1 OR LOWER(email) = LOWER($2)
-    LIMIT 1
-  `, [googleId, normalizedEmail])
+  // Match on the directory identity only. The mail attribute is not proof of
+  // owning an address, so it must never select (and take over) another account.
+  const existing = await queryOne<UserRow>(pool, 'SELECT * FROM users WHERE google_id = $1', [googleId])
 
   if (existing) {
+    // Follow a changed mail attribute unless another account already uses it.
     await pool.query(`
       UPDATE users
-      SET google_id = $1,
-          email = $2,
-          name = $3,
-          avatar_url = COALESCE($4, avatar_url),
-          updated_at = $5
-      WHERE id = $6
-    `, [googleId, normalizedEmail, name, input.avatarUrl ?? null, now, existing.id])
+      SET email = CASE WHEN EXISTS (SELECT 1 FROM users other WHERE LOWER(other.email) = LOWER($1) AND other.id <> $5) THEN email ELSE $1 END,
+          name = $2,
+          avatar_url = COALESCE($3, avatar_url),
+          updated_at = $4
+      WHERE id = $5
+    `, [normalizedEmail, name, input.avatarUrl ?? null, now, existing.id])
 
     return sanitizeUser((await findUserById(existing.id))!)
+  }
+
+  if (await findUserByEmail(normalizedEmail)) {
+    throw Object.assign(new Error('This email address already belongs to another account. Ask an administrator to link it.'), { status: 409 })
   }
 
   const id = randomUUID()
