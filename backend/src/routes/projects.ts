@@ -3664,8 +3664,9 @@ function normalizeProjectPath(input: string): string {
 
 function joinProjectPath(parentPath: string | null, name: string): string {
   const normalizedName = name.trim()
-  if (!normalizedName || normalizedName.includes('/')) {
-    throw new Error('Invalid file or folder name')
+  // "." and ".." would resolve to the parent directories on disk.
+  if (!normalizedName || normalizedName === '.' || normalizedName === '..' || /[/\\\0]/.test(normalizedName)) {
+    throw Object.assign(new Error('Invalid file or folder name'), { status: 400 })
   }
 
   return parentPath ? `${parentPath}/${normalizedName}` : normalizedName
