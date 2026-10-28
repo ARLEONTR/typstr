@@ -86,14 +86,19 @@ export async function createApp() {
   app.use('/api/feedback', requireAuth, feedbackRouter)
 
   app.use(async (err: unknown, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
-    console.error('[Global Error Handler]', err); const message = err instanceof Error ? err.message : 'Unexpected server error'
-    const typedError = err as { status?: number; code?: string; limitKey?: string; statusPayload?: unknown }
+    console.error('[Global Error Handler]', err)
+    const typedError = err as { status?: number; code?: string; limitKey?: string; statusPayload?: unknown; severity?: unknown; syscall?: unknown }
+    // Database and filesystem errors carry SQL, constraint names and server
+    // paths; log them but do not send them to the client.
+    const isInternalError = typedError.severity !== undefined || typedError.syscall !== undefined
+    const internalMessage = err instanceof Error ? err.message : 'Unexpected server error'
+    const message = isInternalError ? 'Unexpected server error' : internalMessage
     const status = typedError.status ?? (/auth|forbidden|denied/i.test(message) ? 401 : 500)
     try {
       const reliability = await import('./services/reliability.js')
       await reliability.recordErrorEvent({
         scope: 'express',
-        message,
+        message: internalMessage,
         code: typedError.code ?? null,
         details: err instanceof Error ? err.stack ?? null : JSON.stringify(err),
       })
@@ -102,7 +107,7 @@ export async function createApp() {
     }
     res.status(status).json({
       error: message,
-      code: typedError.code ?? null,
+      code: isInternalError ? null : typedError.code ?? null,
       limitKey: typedError.limitKey,
       billing: typedError.statusPayload,
     })
