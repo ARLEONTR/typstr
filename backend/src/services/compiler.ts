@@ -1,6 +1,6 @@
 import { spawn } from 'node:child_process'
 import { createHash } from 'node:crypto'
-import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, readdirSync, rmSync, existsSync, statSync } from 'node:fs'
+import { chmodSync, chownSync, mkdtempSync, mkdirSync, writeFileSync, readFileSync, readdirSync, rmSync, existsSync, statSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import os from 'node:os'
@@ -26,6 +26,86 @@ const latexCompileInflight = new Map<string, Promise<CompileLatexResult>>()
 // Cache SHA256 hashes for Buffer objects by reference — avoids re-hashing
 // binary assets (fonts, images) that haven't changed between compiles.
 const bufferHashCache = new WeakMap<Buffer, string>()
+
+// TeX engines, biber and make4ht can read any file their user can read
+// (\verbatiminput{/proc/1/environ}, Lua io.open, biber data sources), and
+// kpathsea's openin_any does not restrict reads. In the production image they
+// therefore run as the separate typstr-tex user through a setuid helper (see
+// backend/sandbox): it can reach only the compile directories shared with it,
+// not the backend's environment, project storage or backups.
+const TEX_SANDBOX_BIN = '/usr/local/bin/typstr-tex-sandbox'
+const TEX_SANDBOX_HOME = '/var/cache/typstr-tex'
+const texSandboxGid = (() => {
+  try {
+    const helper = statSync(TEX_SANDBOX_BIN)
+    return (helper.mode & 0o4000) !== 0 && helper.uid === 0 ? helper.gid : null
+  } catch {
+    return null
+  }
+})()
+
+const TEX_ENV_PASSTHROUGH = ['PATH', 'HOME', 'LANG', 'LC_ALL', 'TZ', 'TMPDIR', 'TEXMFHOME', 'TEXMFVAR', 'TEXMFCONFIG', 'TEXMFCACHE', 'SOURCE_DATE_EPOCH']
+
+// The backend's environment holds secrets, so TeX tools get only what they need.
+export function texProcessEnv(): NodeJS.ProcessEnv {
+  const texEnv: NodeJS.ProcessEnv = { NO_COLOR: '1', openin_any: 'p', openout_any: 'p' }
+  for (const key of TEX_ENV_PASSTHROUGH) {
+    if (process.env[key] !== undefined) texEnv[key] = process.env[key]
+  }
+  if (texSandboxGid !== null) texEnv.HOME = TEX_SANDBOX_HOME
+  return texEnv
+}
+
+export function texCommand(bin: string, args: string[]): { command: string; args: string[] } {
+  return texSandboxGid === null ? { command: bin, args } : { command: TEX_SANDBOX_BIN, args: [bin, ...args] }
+}
+
+// Give the TeX user access to a fresh compile directory. The setgid bit and
+// the backend's 007 umask make everything created inside shared as well.
+export function shareDirectoryWithTex(dir: string): void {
+  if (texSandboxGid === null) return
+  chownSync(dir, -1, texSandboxGid)
+  chmodSync(dir, 0o2770)
+}
+
+// Run once at startup: keep new files private to the backend user and its
+// groups, and close storage and backups to everyone else, including typstr-tex.
+export function initializeTexSandbox(): void {
+  if (texSandboxGid === null) {
+    console.warn(`[compiler] ${TEX_SANDBOX_BIN} not found: LaTeX runs as the backend user and can read its files`)
+    return
+  }
+
+  process.umask(0o007)
+  const lockdown: Array<[string, number]> = [
+    [env.localStorageRoot, 0o711],
+    [path.join(env.localStorageRoot, 'users'), 0o700],
+    [getBaseCompileDir(), 0o711],
+  ]
+  if (env.backupDir) lockdown.push([env.backupDir, 0o700])
+  for (const [dir, mode] of lockdown) {
+    try {
+      if (existsSync(dir)) chmodSync(dir, mode)
+    } catch (error) {
+      console.warn(`[compiler] could not restrict ${dir}:`, error)
+    }
+  }
+}
+
+// biber is not covered by kpathsea's openin_any, so check the data sources it
+// is about to read: only relative, local files inside the workspace.
+function findUnsafeBiberDataSource(bcfPath: string): string | null {
+  if (!pathExists(bcfPath)) return null
+  const bcf = readFileSync(bcfPath, 'utf8')
+  for (const match of bcf.matchAll(/<bcf:datasource\b([^>]*)>([^<]*)<\/bcf:datasource>/g)) {
+    const attributes = match[1]
+    const source = match[2].trim()
+    if (!/\btype="file"/.test(attributes) || path.isAbsolute(source) || source.split(/[\\/]/).includes('..') || /^[a-z][a-z0-9+.-]*:/i.test(source)) {
+      return source
+    }
+  }
+  return null
+}
 
 function getBaseCompileDir(): string {
   if (env.compileTmpdir) {
@@ -491,6 +571,7 @@ export async function compileLatexProjectToPdf(input: {
       let state = persistentLatexWorkspaces.get(previewSessionId)
       if (!state) {
         const dir = mkdtempSync(path.join(getBaseCompileDir(), 'typstr-latex-ws-'))
+        shareDirectoryWithTex(dir)
         state = { dir, fileContentRefs: new Map(), lastUsedAt: Date.now() }
         persistentLatexWorkspaces.set(previewSessionId, state)
       } else {
@@ -501,6 +582,7 @@ export async function compileLatexProjectToPdf(input: {
       isPersistent = true
     } else {
       workDir = mkdtempSync(path.join(getBaseCompileDir(), 'typstr-latex-'))
+      shareDirectoryWithTex(workDir)
       writeWorkspaceFiles(workDir, input.files)
     }
 
@@ -643,6 +725,15 @@ export async function compileLatexProjectToPdf(input: {
           }
 
           if (bibliographyCommand === null || !pathExists(mainAux)) {
+            continueAfterBib()
+            return
+          }
+
+          const unsafeDataSource = bibliographyCommand.command === 'biber'
+            ? findUnsafeBiberDataSource(path.join(latexWorkDir, `${jobName}.bcf`))
+            : null
+          if (unsafeDataSource !== null) {
+            errors.push(`biber skipped: bibliography resource "${unsafeDataSource}" must be a relative file inside the project.`)
             continueAfterBib()
             return
           }
@@ -843,10 +934,11 @@ function runLatexCommand(
       return
     }
 
-    const proc = spawn(bin, args, {
+    const command = texCommand(bin, args)
+    const proc = spawn(command.command, command.args, {
       cwd,
       stdio: ['ignore', 'pipe', 'pipe'],
-      env: { ...process.env, NO_COLOR: '1' },
+      env: texProcessEnv(),
     })
     const chunks: Buffer[] = []
     let settled = false

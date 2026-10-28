@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
-import { compileLatexProjectToPdf, parseCompileDiagnostics } from './compiler.js'
+import { compileLatexProjectToPdf, parseCompileDiagnostics, texProcessEnv } from './compiler.js'
 
 test('LaTeX compiler skips final pass when first pass is clean', async () => {
   const tempRoot = mkdtempSync(path.join(tmpdir(), 'typstr-compiler-test-'))
@@ -17,7 +17,7 @@ test('LaTeX compiler skips final pass when first pass is clean', async () => {
     const fakePdflatexPath = path.join(fakeBinDir, 'pdflatex')
     writeFileSync(fakePdflatexPath, [
       '#!/bin/sh',
-      'printf "%s\\n" "$*" >> "$TYPSTR_FAKE_LATEX_ARGS_LOG"',
+      `printf "%s\\n" "$*" >> "${argsLogPath}"`,
       'printf "aux" > main.aux',
       'printf "%s\\n" "%PDF-1.4" > main.pdf',
       'echo "fake pdflatex clean"',
@@ -60,7 +60,7 @@ test('LaTeX compiler runs nested entry files from their containing directory', a
     const fakePdflatexPath = path.join(fakeBinDir, 'pdflatex')
     writeFileSync(fakePdflatexPath, [
       '#!/bin/sh',
-      'pwd >> "$TYPSTR_FAKE_LATEX_CWD_LOG"',
+      `pwd >> "${cwdLogPath}"`,
       'if [ ! -f "main.tex" ]; then echo "missing main.tex"; exit 1; fi',
       'printf "aux" > main.aux',
       'printf "%s\\n" "%PDF-1.4" > main.pdf',
@@ -104,7 +104,7 @@ test('LaTeX compiler keeps generated PDF when engine reports errors', async () =
     const fakePdflatexPath = path.join(fakeBinDir, 'pdflatex')
     writeFileSync(fakePdflatexPath, [
       '#!/bin/sh',
-      'printf "%s\\n" "$*" >> "$TYPSTR_FAKE_LATEX_ARGS_LOG"',
+      `printf "%s\\n" "$*" >> "${argsLogPath}"`,
       'printf "aux" > main.aux',
       'printf "%s\\n" "%PDF-1.4" > main.pdf',
       'echo "simulated recoverable latex error"',
@@ -150,4 +150,19 @@ test('compiler diagnostics parse LaTeX file-line errors', () => {
   assert.equal(diagnostics[0].level, 'error')
   assert.equal(diagnostics[0].filePath, 'main.tex')
   assert.equal(diagnostics[0].line, 7)
+})
+
+test('TeX tools get no backend secrets and paranoid file access', () => {
+  const previousSecret = process.env.SESSION_SECRET
+  process.env.SESSION_SECRET = 'do-not-leak'
+  try {
+    const texEnv = texProcessEnv()
+    assert.equal(texEnv.SESSION_SECRET, undefined)
+    assert.equal(texEnv.openin_any, 'p')
+    assert.equal(texEnv.openout_any, 'p')
+    assert.equal(texEnv.PATH, process.env.PATH)
+  } finally {
+    if (previousSecret === undefined) delete process.env.SESSION_SECRET
+    else process.env.SESSION_SECRET = previousSecret
+  }
 })

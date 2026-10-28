@@ -2,7 +2,7 @@ import path from 'node:path'
 import { spawn } from 'node:child_process'
 import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync, existsSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { compileTypstProjectToPdf } from './compiler.js'
+import { compileTypstProjectToPdf, shareDirectoryWithTex, texCommand, texProcessEnv } from './compiler.js'
 import type { ExportFormat, ProjectFormat } from '../types.js'
 
 interface WorkspaceFileLike {
@@ -91,10 +91,17 @@ export async function convertLatexWorkspaceToHtmlWithPandoc(input: {
 
   try {
     writeWorkspaceFiles(tmpDir, input.files)
-    const entryFile = resolveWorkspacePath(tmpDir, input.entryPath)
+    // pandoc runs sandboxed and cannot follow \input itself, so inline the
+    // project's own files and name its bibliographies on the command line.
+    const entryDir = path.posix.dirname(input.entryPath.replace(/\\/g, '/').replace(/^\/+/, ''))
+    const flattenedSource = inlineLatexInputs(input.entryPath, input.files)
+    const flattenedFile = path.join(path.dirname(resolveWorkspacePath(tmpDir, input.entryPath)), '.typstr-pandoc-entry.tex')
+    writeFileSync(flattenedFile, flattenedSource, 'utf8')
+    const bibliographyArgs = findLatexBibliographies(flattenedSource, entryDir, input.files)
+      .flatMap((bibPath) => ['--bibliography', resolveWorkspacePath(tmpDir, bibPath)])
     const buffer = await runPandoc(
       [
-        entryFile,
+        flattenedFile,
         '-f', 'latex',
         '-t', 'html',
         '-o', '-',
@@ -102,6 +109,7 @@ export async function convertLatexWorkspaceToHtmlWithPandoc(input: {
         '--citeproc',
         '--mathjax',
         '--resource-path', tmpDir,
+        ...bibliographyArgs,
       ],
       { cwd: tmpDir },
     )
@@ -116,6 +124,7 @@ export async function convertLatexWorkspaceToHtmlWithMake4ht(input: {
   files: WorkspaceFileLike[]
 }): Promise<string> {
   const tmpDir = mkdtempSync(path.join(tmpdir(), 'typstr-make4ht-'))
+  shareDirectoryWithTex(tmpDir)
   const outputDir = path.join(tmpDir, 'out')
 
   try {
@@ -459,9 +468,11 @@ async function runPandoc(
   const timeoutMs = options.timeoutMs ?? 60_000
 
   return new Promise<Buffer>((resolve, reject) => {
-    const proc = spawn('pandoc', args, {
+    // --sandbox: readers may only open files named on the command line, so
+    // \lstinputlisting{/proc/1/environ} and friends cannot leak server files.
+    const proc = spawn('pandoc', ['--sandbox', ...args], {
       stdio: ['pipe', 'pipe', 'pipe'],
-      env: { ...process.env, NO_COLOR: '1' },
+      env: texProcessEnv(),
       cwd,
     })
 
@@ -509,9 +520,10 @@ async function runMake4ht(
   const timeoutMs = options.timeoutMs ?? 60_000
 
   return new Promise<void>((resolve, reject) => {
-    const proc = spawn('make4ht', args, {
+    const command = texCommand('make4ht', args)
+    const proc = spawn(command.command, command.args, {
       stdio: ['ignore', 'pipe', 'pipe'],
-      env: { ...process.env, NO_COLOR: '1' },
+      env: texProcessEnv(),
       cwd,
     })
 
@@ -622,6 +634,59 @@ function escapeHtmlAttribute(value: string): string {
     .replace(/"/g, '&quot;')
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
+}
+
+const LATEX_INPUT_RE = /\\(?:input|include)\s*\{([^}]+)\}/g
+const MAX_LATEX_INPUT_DEPTH = 20
+
+function findWorkspaceTextFile(files: WorkspaceFileLike[], candidates: string[]): WorkspaceFileLike | undefined {
+  for (const candidate of candidates) {
+    const normalized = path.posix.normalize(candidate)
+    if (normalized.startsWith('..') || path.posix.isAbsolute(normalized)) continue
+    const file = files.find((entry) => entry.path.replace(/\\/g, '/').replace(/^\/+/, '') === normalized)
+    if (file && typeof file.content === 'string') return file
+  }
+  return undefined
+}
+
+// Inline \input / \include of project files (paths resolve from the entry
+// file's directory, as LaTeX does). Commented-out lines are left alone and
+// anything outside the project stays as is for the sandbox to refuse.
+function inlineLatexInputs(entryPath: string, files: WorkspaceFileLike[]): string {
+  const entry = entryPath.replace(/\\/g, '/').replace(/^\/+/, '')
+  const entryDir = path.posix.dirname(entry)
+  const entryFile = findWorkspaceTextFile(files, [entry])
+  if (!entryFile) throw new Error(`Entry file not found: ${entryPath}`)
+
+  const expand = (source: string, depth: number): string => source.split('\n').map((line) => {
+    const commentAt = line.search(/(?<!\\)%/)
+    const code = commentAt === -1 ? line : line.slice(0, commentAt)
+    const expanded = code.replace(LATEX_INPUT_RE, (directive, rawTarget: string) => {
+      if (depth >= MAX_LATEX_INPUT_DEPTH) return directive
+      const target = rawTarget.trim()
+      const relative = path.posix.join(entryDir, target)
+      const file = findWorkspaceTextFile(files, [relative, `${relative}.tex`, target, `${target}.tex`])
+      return file ? expand(file.content as string, depth + 1) : directive
+    })
+    return commentAt === -1 ? expanded : expanded + line.slice(commentAt)
+  }).join('\n')
+
+  return expand(entryFile.content as string, 0)
+}
+
+function findLatexBibliographies(source: string, entryDir: string, files: WorkspaceFileLike[]): string[] {
+  const names = [
+    ...[...source.matchAll(/\\bibliography\s*\{([^}]+)\}/g)].flatMap((match) => match[1].split(',')),
+    ...[...source.matchAll(/\\addbibresource(?:\[[^\]]*\])?\s*\{([^}]+)\}/g)].map((match) => match[1]),
+  ].map((name) => name.trim()).filter(Boolean)
+
+  const found = new Set<string>()
+  for (const name of names) {
+    const relative = path.posix.join(entryDir, name)
+    const file = findWorkspaceTextFile(files, [relative, `${relative}.bib`, name, `${name}.bib`])
+    if (file) found.add(file.path.replace(/\\/g, '/').replace(/^\/+/, ''))
+  }
+  return [...found]
 }
 
 function writeWorkspaceFiles(tmpDir: string, files: WorkspaceFileLike[]): void {

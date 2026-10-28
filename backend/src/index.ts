@@ -9,9 +9,11 @@ import { logger } from './logger.js'
 import { initializeReliabilityTables, scheduleDatabaseBackup, scheduleRetentionJob, startBackgroundJobWorker } from './services/reliability.js'
 import { opsRouter } from './routes/ops.js'
 import { proxyTypstPreviewWebSocket } from './services/tinymistPreview.js'
+import { initializeTexSandbox } from './services/compiler.js'
 
 const PORT = parseInt(process.env.PORT ?? '3000', 10)
 
+initializeTexSandbox()
 await initializeDatabase()
 await initializeReliabilityTables()
 startBackgroundJobWorker()

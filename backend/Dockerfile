@@ -8,6 +8,14 @@ RUN npm ci --loglevel=error
 COPY . .
 RUN npm run build
 
+# ---- TeX sandbox helper (static, so it does not depend on the runtime libc) ----
+FROM debian:bookworm-slim AS tex-sandbox
+ARG TEX_SANDBOX_ID=990
+RUN apt-get update && apt-get install -y --no-install-recommends gcc libc6-dev && rm -rf /var/lib/apt/lists/*
+COPY sandbox/typstr-tex-sandbox.c /src/
+RUN gcc -O2 -static -Wall -Werror -DTEX_UID=${TEX_SANDBOX_ID} -DTEX_GID=${TEX_SANDBOX_ID} \
+      -o /typstr-tex-sandbox /src/typstr-tex-sandbox.c
+
 # ---- Runtime stage ----
 FROM ${BACKEND_BASE_IMAGE} AS runtime
 WORKDIR /app
@@ -70,6 +78,20 @@ RUN mkdir -p /home/node/.cache && chown -R node:node /home/node
 RUN mkdir -p /app/.local-storage && chown -R node:node /app/.local-storage
 # Typst package cache (used in compiler.ts)
 RUN mkdir -p /root/.cache/typst && chown -R node:node /root/.cache/typst
+
+# LaTeX tools run as typstr-tex through the setuid helper, so a document
+# cannot read the backend's environment, project storage or backups.
+ARG TEX_SANDBOX_ID=990
+COPY --from=tex-sandbox /typstr-tex-sandbox /usr/local/bin/typstr-tex-sandbox
+RUN groupadd --system --gid ${TEX_SANDBOX_ID} typstr-tex \
+ && useradd --system --uid ${TEX_SANDBOX_ID} --gid typstr-tex --home-dir /var/cache/typstr-tex --shell /usr/sbin/nologin typstr-tex \
+ && usermod -aG typstr-tex node \
+ && install -d -o typstr-tex -g typstr-tex -m 0700 /var/cache/typstr-tex \
+ && chown root:typstr-tex /usr/local/bin/typstr-tex-sandbox \
+ && chmod 4750 /usr/local/bin/typstr-tex-sandbox
+# Build the LuaLaTeX font cache now, so the first fontspec compile after a
+# deploy does not spend ~15 s on it.
+RUN runuser -u typstr-tex -- env HOME=/var/cache/typstr-tex luaotfload-tool --update --quiet || true
 
 # Non-root user
 USER node
