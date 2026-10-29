@@ -523,6 +523,8 @@ export async function createBinaryFileInDrive(input: {
     const targetPath = path.join(parentInfo.rootPath, parentInfo.relativePath, input.name)
     await mkdir(path.dirname(targetPath), { recursive: true })
     await writeFile(targetPath, input.content)
+    // Uploading over an existing file reuses its path, which is the cache key.
+    driveFileBufferCache.delete(targetPath)
     return targetPath
   }
 

@@ -159,6 +159,7 @@ import {
   inferProjectFileMimeType,
   importProjectZip,
   isProjectTextFilePath,
+  replaceProjectFileText,
   listDashboardProjects,
   publishProjectTemplate,
   listProjectChat,
@@ -172,6 +173,7 @@ import {
   voteOnProjectTemplate,
   updateProjectState as updateProjectFeatureState,
 } from '../services/projectFeatures.js'
+import { decodeProjectText } from '../services/zipImport.js'
 import type { ProjectCommentPdfAnnotation, ProjectCompileSettings, ProjectEcosystemState, ProjectFile, ProjectFormat, ProjectMember, ProjectRole } from '../types.js'
 import { validateString, validateOptionalString, validateEmail, validateArrayLength } from '../validation.js'
 import { sendReviewRequestEmail } from '../services/email.js'
@@ -305,7 +307,9 @@ const VALID_EXPORT_FORMATS = new Set(['pdf', 'docx', 'latex', 'html'])
 const VALID_EXPORT_DESTINATIONS = new Set(['download', 'drive'])
 const VALID_PROJECT_FORMATS: ProjectFormat[] = ['typst', 'latex', 'gdoc']
 const VALID_CREATION_PROJECT_FORMATS: ProjectFormat[] = ['typst', 'latex']
-const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 25 * 1024 * 1024 } })
+// Browsers send UTF-8 file names; busboy's default (latin1) garbles non-ASCII names.
+const upload = multer({ storage: multer.memoryStorage(), defParamCharset: 'utf8', limits: { fileSize: env.uploadLimitMb * 1024 * 1024, files: 1 } })
+const zipUpload = multer({ storage: multer.memoryStorage(), defParamCharset: 'utf8', limits: { fileSize: env.zipImportLimitMb * 1024 * 1024, files: 1 } })
 const scholarSearchCache = new Map<string, { expiresAt: number; data: unknown[] }>()
 const SCHOLAR_SEARCH_CACHE_TTL_MS = 30 * 60 * 1000
 const ARXIV_SEARCH_RETRY_DELAYS_MS = [0, 700, 1600]
@@ -411,7 +415,7 @@ projectsRouter.get('/', async (req, res) => {
   res.json(await listProjectsForUser(user.id))
 })
 
-projectsRouter.post('/import-zip', upload.single('file'), async (req, res, next) => {
+projectsRouter.post('/import-zip', zipUpload.single('file'), async (req, res, next) => {
   try {
     const user = getAuthenticatedUser(req)
     if (!req.file) {
@@ -3112,6 +3116,23 @@ projectsRouter.post('/:projectId/uploads', upload.single('file'), async (req, re
     const parentFolder = await resolveParentFolder(project.id, project.driveFolderId, typeof req.body.parentPath === 'string' ? req.body.parentPath : null)
     const nextPath = joinProjectPath(parentFolder.path, req.file.originalname)
     const mimeType = normalizeUploadedProjectFileMimeType(req.file.originalname, req.file.mimetype)
+    const existing = await getProjectFileByPath(project.id, nextPath)
+    if (existing?.mimeType === DRIVE_FOLDER_MIME_TYPE) {
+      return res.status(409).json({ error: `A folder named ${req.file.originalname} already exists here.` })
+    }
+    if (existing && existing.mimeType.startsWith('text/') && mimeType.startsWith('text/')) {
+      // Uploading over a text file replaces its content like an edit would.
+      await replaceProjectFileText(existing.id, decodeProjectText(req.file.buffer))
+      invalidateProjectWorkspaceCache(project.id)
+      await logProjectActivity({
+        projectId: project.id,
+        actorUserId: user.id,
+        type: 'file.upload',
+        summary: `Replaced ${existing.path} with an uploaded file.`,
+        metadata: { fileId: existing.id, mimeType: existing.mimeType },
+      })
+      return res.status(200).json((await getProjectFileById(existing.id)) ?? existing)
+    }
     const driveFileId = await createBinaryFileInDrive({
       userId: project.ownerUserId,
       parentId: parentFolder.driveFileId,

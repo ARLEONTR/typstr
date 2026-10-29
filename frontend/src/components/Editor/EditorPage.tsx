@@ -23,6 +23,7 @@ import CitationSearchPopup from './CitationSearchPopup'
 import { TasksPanel } from './TasksPanel'
 import PreviewErrorBoundary from './PreviewErrorBoundary'
 import { convertLatexSnippetToTypst, explainCompileDiagnostic, type EditorSignatureHint } from './editorLearning'
+import { collectDroppedFiles, runWithConcurrency, type DroppedUpload, type UploadItem } from '../../droppedFiles'
 
 const BibliographyPanel = lazy(() => import('./BibliographyPanel'))
 const AcademicPanel = lazy(() => import('./AcademicPanel'))
@@ -3176,68 +3177,114 @@ function ProjectWorkspace({
     setInlineCreateState((current) => current ? { ...current, name, error: null } : current)
   }, [])
 
-  const handleUploadFiles = useCallback(async (files: FileList | null) => {
-    if (!canEdit || !files?.length) {
+  const handleUploadFiles = useCallback(async (input: FileList | DroppedUpload | null) => {
+    if (!canEdit || !input) {
       return
     }
 
-    const selectedFiles = Array.from(files)
-    const uploaded: ProjectFile[] = []
+    const upload: DroppedUpload = 'folders' in input
+      ? input
+      : { files: Array.from(input).map((file) => ({ file, directory: null })), folders: [] }
+    if (upload.files.length === 0 && upload.folders.length === 0) {
+      return
+    }
+
     const parentPath = pendingUploadFolderPathRef.current ?? targetFolderPath
     pendingUploadFolderPathRef.current = null
-    const optimisticFiles = selectedFiles.map((file, index) => createOptimisticUploadedFile(file, parentPath, index))
+    const targetPath = (directory: string | null) => (directory ? joinProjectPath(parentPath, directory) : parentPath)
+    const optimisticFiles = upload.files.map((item, index) => createOptimisticUploadedFile(item.file, targetPath(item.directory), index))
+    const isOptimistic = (file: ProjectFile) => optimisticFiles.some((optimisticFile) => optimisticFile.id === file.id)
 
     onProjectChange((current) => current ? {
       ...current,
-      fileCount: current.fileCount + optimisticFiles.filter((file) => file.mimeType !== DRIVE_FOLDER_MIME_TYPE).length,
+      fileCount: current.fileCount + optimisticFiles.length,
       files: [...current.files, ...optimisticFiles].sort((left, right) => left.path.localeCompare(right.path)),
     } : current)
 
-    try {
-      for (const file of selectedFiles) {
-        const formData = new FormData()
-        formData.append('file', file)
-        if (parentPath) {
-          formData.append('parentPath', parentPath)
-        }
+    const folders: ProjectFile[] = []
+    const uploaded: ProjectFile[] = []
+    const failedFiles: UploadItem[] = []
+    let firstError: string | null = null
 
-        const response = await apiClient.post<ProjectFile>(`/api/projects/${project.id}/uploads`, formData)
-        uploaded.push(response.data)
+    // Folders first, parents before children. The endpoint returns an
+    // existing folder unchanged, so dropping into a matching tree is safe.
+    for (const folder of upload.folders) {
+      try {
+        const response = await apiClient.post<ProjectFile>(`/api/projects/${project.id}/folders`, {
+          name: folder.split('/').pop(),
+          parentPath: targetPath(parentDirectoryPath(folder)),
+        })
+        folders.push(response.data)
+      } catch (error: any) {
+        firstError ??= error?.response?.data?.error ?? `Failed to create folder ${folder}.`
       }
-    } catch (error: any) {
-      onProjectChange((current) => current ? {
-        ...current,
-        fileCount: current.fileCount - optimisticFiles.filter((file) => file.mimeType !== DRIVE_FOLDER_MIME_TYPE).length,
-        files: current.files.filter((file) => !optimisticFiles.some((optimisticFile) => optimisticFile.id === file.id)),
-      } : current)
-      reportMutationError(
-        error?.response?.data?.error ?? 'Failed to upload one or more files.',
-        () => { void handleUploadFiles(fileListFromArray(selectedFiles)) },
-      )
-      return
     }
 
+    await runWithConcurrency(upload.files, 4, async (item) => {
+      const formData = new FormData()
+      formData.append('file', item.file)
+      const itemParentPath = targetPath(item.directory)
+      if (itemParentPath) {
+        formData.append('parentPath', itemParentPath)
+      }
+
+      try {
+        const response = await apiClient.post<ProjectFile>(`/api/projects/${project.id}/uploads`, formData)
+        uploaded.push(response.data)
+      } catch (error: any) {
+        failedFiles.push(item)
+        firstError ??= error?.response?.data?.error ?? 'Failed to upload one or more files.'
+      }
+    })
+
+    const received = [...folders, ...uploaded]
     onProjectChange((current) => current ? {
       ...current,
-      fileCount: current.fileCount - optimisticFiles.filter((file) => file.mimeType !== DRIVE_FOLDER_MIME_TYPE).length + uploaded.filter((file) => file.mimeType !== DRIVE_FOLDER_MIME_TYPE).length,
-      files: [...current.files.filter((file) => !optimisticFiles.some((optimisticFile) => optimisticFile.id === file.id)), ...uploaded].sort((left, right) => left.path.localeCompare(right.path)),
+      fileCount: current.fileCount - optimisticFiles.length + uploaded.length,
+      files: [
+        ...current.files.filter((file) => !isOptimistic(file) && !received.some((entry) => entry.id === file.id)),
+        ...received,
+      ].sort((left, right) => left.path.localeCompare(right.path)),
     } : current)
-    clearMutationNotice()
+
+    if (firstError) {
+      const failedNames = failedFiles.map((item) => (item.directory ? `${item.directory}/${item.file.name}` : item.file.name))
+      const detail = failedNames.length > 0
+        ? ` (${failedNames.length} of ${upload.files.length} files: ${failedNames.slice(0, 3).join(', ')}${failedNames.length > 3 ? ', …' : ''})`
+        : ''
+      reportMutationError(`${firstError}${detail}`, () => {
+        pendingUploadFolderPathRef.current = parentPath
+        void handleUploadFiles({ files: failedFiles, folders: upload.folders })
+      })
+    } else {
+      clearMutationNotice()
+    }
 
     if (uploaded.some((f) => f.name.endsWith('.bib'))) {
       void loadEcosystem()
     }
 
-    const firstUploaded = uploaded[0]
+    const firstUploaded = uploaded[0] ?? folders[0]
     if (firstUploaded) {
       setFocusedFolderPath(parentPath)
       setExpandedFolders((current) => expandAncestorPaths(current, firstUploaded.path))
-      const firstTextFile = uploaded.find(isEditableTextFile)
+      const firstTextFile = upload.folders.length === 0 ? uploaded.find(isEditableTextFile) : undefined
       if (firstTextFile) {
         onSelectFile(firstTextFile.id)
       }
     }
   }, [canEdit, clearMutationNotice, loadEcosystem, onProjectChange, onSelectFile, project.id, reportMutationError, targetFolderPath])
+
+  /** Upload what was dropped from outside the browser, including whole folders. */
+  const handleExternalDrop = useCallback((dataTransfer: DataTransfer, folderPath: string | null) => {
+    const collected = collectDroppedFiles(dataTransfer)
+    void collected.then((upload) => {
+      pendingUploadFolderPathRef.current = folderPath
+      return handleUploadFiles(upload)
+    }).catch(() => {
+      reportMutationError('Could not read the dropped files.')
+    })
+  }, [handleUploadFiles, reportMutationError])
 
   const handleRenameItem = useCallback(async (file: ProjectFile) => {
     if (!canEdit) {
@@ -5109,8 +5156,7 @@ function ProjectWorkspace({
 
     if (isExternalFileDrag(event)) {
       event.preventDefault()
-      pendingUploadFolderPathRef.current = null
-      void handleUploadFiles(event.dataTransfer.files)
+      handleExternalDrop(event.dataTransfer, null)
       endDrag()
       return
     }
@@ -5124,7 +5170,7 @@ function ProjectWorkspace({
     event.preventDefault()
     endDrag()
     void handleMoveItem(fileId, null)
-  }, [canDropInto, canEdit, endDrag, handleMoveItem, handleUploadFiles, isExternalFileDrag, readDraggedFileId])
+  }, [canDropInto, canEdit, endDrag, handleMoveItem, handleExternalDrop, isExternalFileDrag, readDraggedFileId])
 
   const renderInlineCreateRow = useCallback((parentPath: string | null, depth: number) => {
     if (!inlineCreateState || inlineCreateState.parentPath !== parentPath) {
@@ -5244,8 +5290,7 @@ function ProjectWorkspace({
               if (isExternalFileDrag(event)) {
                 event.preventDefault()
                 event.stopPropagation()
-                pendingUploadFolderPathRef.current = file.path
-                void handleUploadFiles(event.dataTransfer.files)
+                handleExternalDrop(event.dataTransfer, file.path)
                 endDrag()
                 return
               }
@@ -5341,8 +5386,7 @@ function ProjectWorkspace({
           if (isExternalFileDrag(event)) {
             event.preventDefault()
             event.stopPropagation()
-            pendingUploadFolderPathRef.current = file.path
-            void handleUploadFiles(event.dataTransfer.files)
+            handleExternalDrop(event.dataTransfer, file.path)
             endDrag()
             return
           }
@@ -5385,7 +5429,7 @@ function ProjectWorkspace({
         </span>
       </button>
     )
-  }, [activeFile.id, canDropInto, canEdit, dirtyFileId, dropTargetPath, endDrag, focusedFolderPath, handleMoveItem, handleTreeSelectionToggle, handleUploadFiles, isExternalFileDrag, openContextMenu, openContextMenuFromButton, openFileInEditor, pendingAiEditCountsByFile, project.mainFileId, readDraggedFileId, startDrag])
+  }, [activeFile.id, canDropInto, canEdit, dirtyFileId, dropTargetPath, endDrag, focusedFolderPath, handleMoveItem, handleTreeSelectionToggle, handleExternalDrop, isExternalFileDrag, openContextMenu, openContextMenuFromButton, openFileInEditor, pendingAiEditCountsByFile, project.mainFileId, readDraggedFileId, startDrag])
 
   const renderTree = useCallback((nodes: TreeNode[], depth = 0): ReactNode => nodes.flatMap((node) => {
     if (node.type === 'folder') {
@@ -5454,8 +5498,7 @@ function ProjectWorkspace({
                 if (isExternalFileDrag(event)) {
                   event.preventDefault()
                   event.stopPropagation()
-                  pendingUploadFolderPathRef.current = node.path
-                  void handleUploadFiles(event.dataTransfer.files)
+                  handleExternalDrop(event.dataTransfer, node.path)
                   endDrag()
                   return
                 }
@@ -5575,7 +5618,7 @@ function ProjectWorkspace({
         ) : null}
       </div>
     )
-  }), [activeFile.id, canDropInto, canEdit, dirtyFileId, draggedFileId, dropTargetPath, endDrag, expandedFolders, focusedFolderPath, folderVisibleCounts, handleMoveItem, handleTreeSelectionToggle, handleUploadFiles, isExternalFileDrag, openContextMenu, openContextMenuFromButton, openFileInEditor, pendingAiEditCountsByFile, project.mainFileId, readDraggedFileId, renderInlineCreateRow, selectedTreeFileIds, startDrag])
+  }), [activeFile.id, canDropInto, canEdit, dirtyFileId, draggedFileId, dropTargetPath, endDrag, expandedFolders, focusedFolderPath, folderVisibleCounts, handleMoveItem, handleTreeSelectionToggle, handleExternalDrop, isExternalFileDrag, openContextMenu, openContextMenuFromButton, openFileInEditor, pendingAiEditCountsByFile, project.mainFileId, readDraggedFileId, renderInlineCreateRow, selectedTreeFileIds, startDrag])
 
   const contextMenuItems = useMemo(() => {
     if (!contextMenu) {
@@ -11618,14 +11661,6 @@ function createOptimisticInvitation(projectId: string, email: string, role: Excl
     createdAt: now,
     updatedAt: now,
   }
-}
-
-function fileListFromArray(files: File[]): FileList {
-  const dataTransfer = new DataTransfer()
-  for (const file of files) {
-    dataTransfer.items.add(file)
-  }
-  return dataTransfer.files
 }
 
 function iconClassNameForFile(file: ProjectFile, classNames: Record<string, string>): string {
