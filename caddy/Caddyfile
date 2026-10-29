@@ -1,3 +1,9 @@
+{
+  log {
+    level ERROR
+  }
+}
+
 {$DOMAIN_NAME} {
   encode gzip zstd
   reverse_proxy nginx:80 {

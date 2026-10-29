@@ -24,6 +24,7 @@ import { TasksPanel } from './TasksPanel'
 import PreviewErrorBoundary from './PreviewErrorBoundary'
 import { convertLatexSnippetToTypst, explainCompileDiagnostic, type EditorSignatureHint } from './editorLearning'
 import { collectDroppedFiles, runWithConcurrency, type DroppedUpload, type UploadItem } from '../../droppedFiles'
+import { logger } from '../../logger'
 
 const BibliographyPanel = lazy(() => import('./BibliographyPanel'))
 const AcademicPanel = lazy(() => import('./AcademicPanel'))
@@ -1977,7 +1978,7 @@ function ProjectWorkspace({
     }, { signal: controller.signal, timeout: 20_000 }).then((response) => {
       setLanguageServerStatuses(response.data.statuses ?? [])
       if (response.data.timings) {
-        console.debug('[Language diagnostics session]', {
+        logger.debug('[Language diagnostics session]', {
           projectId: project.id,
           fileId: activeFile.id,
           documentFormat,
@@ -2043,7 +2044,7 @@ function ProjectWorkspace({
         setLanguageDiagnostics(response.data.diagnostics ?? [])
         setLanguageServerStatuses(response.data.statuses ?? [])
         if (response.data.timings) {
-          console.debug('[Language diagnostics]', {
+          logger.debug('[Language diagnostics]', {
             projectId: project.id,
             fileId: activeFile.id,
             documentFormat,
@@ -4311,7 +4312,7 @@ function ProjectWorkspace({
     }
 
     if (startOffset === -1) {
-      console.warn('Gemini review: Could not find excerpt in document:', excerpt)
+      logger.warning('Gemini review: Could not find excerpt in document:', excerpt)
       return
     }
 

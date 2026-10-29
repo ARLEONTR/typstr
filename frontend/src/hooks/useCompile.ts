@@ -4,6 +4,7 @@ import type { CompileDiagnostic, CompilePreviewFormat, CompileResponse, LatexSyn
 import { compileLatexWasmToPdf, isBusytexRunnerReady, warmBusytexAssetsInBackground } from '../latexWasm'
 import { compileTypstWasm, compileTypstWasmToPdf, isFatalTypstWasmError, resetTypstWasmState } from '../typstWasmClient'
 import type { LatexEngine } from '../latexWasm'
+import { logger } from '../logger'
 
 export type LatexWebPreviewEngine = 'pandoc-wasm' | 'make4ht' | 'pandoc'
 
@@ -573,7 +574,7 @@ export function useCompile(options: UseCompileOptions = {}) {
               }
               const message = stringifyUnknownError(wasmError)
               if (message) {
-                console.warn('[compile:typst-wasm] fallback to server compiler:', message)
+                logger.warning('[compile:typst-wasm] fallback to server compiler:', message)
               }
               usedServerFallbackFromWasm = true
             }
@@ -714,7 +715,7 @@ export function useCompile(options: UseCompileOptions = {}) {
 
             if (allowLatexWasmPdf) {
               void warmBusytexAssetsInBackground().catch((error) => {
-                console.warn('[busytex:warmup] background preparation failed:', stringifyUnknownError(error))
+                logger.warning('[busytex:warmup] background preparation failed:', stringifyUnknownError(error))
               })
             }
 

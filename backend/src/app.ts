@@ -4,7 +4,7 @@ import helmet from 'helmet'
 import morgan from 'morgan'
 import { initializeAuth, requireAuth } from './auth.js'
 import { env } from './env.js'
-import { shouldLog } from './logger.js'
+import { logger, shouldLog } from './logger.js'
 import { authRouter } from './routes/auth.js'
 import { adminRouter } from './routes/admin.js'
 import { invitationsRouter } from './routes/invitations.js'
@@ -86,7 +86,6 @@ export async function createApp() {
   app.use('/api/feedback', requireAuth, feedbackRouter)
 
   app.use(async (err: unknown, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
-    console.error('[Global Error Handler]', err)
     const typedError = err as { status?: number; code?: string; limitKey?: string; statusPayload?: unknown; severity?: unknown; syscall?: unknown }
     // Database and filesystem errors carry SQL, constraint names and server
     // paths; log them but do not send them to the client.
@@ -95,6 +94,12 @@ export async function createApp() {
     const message = isInternalError ? 'Unexpected server error' : internalMessage
     const isUploadTooLarge = typedError.code === 'LIMIT_FILE_SIZE' || (err as { type?: string }).type === 'entity.too.large'
     const status = isUploadTooLarge ? 413 : typedError.status ?? (/auth|forbidden|denied/i.test(message) ? 401 : 500)
+    // Client errors (bad input, missing access) are expected; keep the error log for real failures.
+    if (status >= 500) {
+      logger.error('[Global Error Handler]', err)
+    } else {
+      logger.warning('[Global Error Handler]', status, internalMessage)
+    }
     try {
       const reliability = await import('./services/reliability.js')
       await reliability.recordErrorEvent({
