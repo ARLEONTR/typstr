@@ -57,7 +57,54 @@ function attribute(tag: string, name: string): string | null {
   return tag.match(new RegExp(`\\s${name}="([^"]*)"`))?.[1] ?? null
 }
 
+// typst.ts embeds a stylesheet with bare selectors such as `svg { fill: none }`.
+// Inline SVG styles apply to the whole page, so that rule hid every
+// fill-only icon in the app (the Render button's arrow) once a preview had
+// rendered. Scope each rule to the preview's own root element.
+const PREVIEW_ROOT = 'svg.typst-doc'
+
+export function scopeTypstStyles(css: string): string {
+  let out = ''
+  let index = 0
+  while (index < css.length) {
+    const open = css.indexOf('{', index)
+    if (open === -1) {
+      out += css.slice(index)
+      break
+    }
+    const prelude = css.slice(index, open)
+    let depth = 1
+    let close = open + 1
+    while (close < css.length && depth > 0) {
+      if (css[close] === '{') depth += 1
+      else if (css[close] === '}') depth -= 1
+      close += 1
+    }
+    const block = css.slice(open, close)
+    const selector = prelude.trim()
+    if (selector.startsWith('@')) {
+      out += prelude + block
+    } else {
+      const scoped = selector.split(',').map((part) => {
+        const trimmed = part.trim()
+        return /^svg\b/.test(trimmed) ? trimmed.replace(/^svg\b/, PREVIEW_ROOT) : `${PREVIEW_ROOT} ${trimmed}`
+      }).join(',\n')
+      out += `${prelude.slice(0, prelude.length - prelude.trimStart().length)}${scoped} ${block}`
+    }
+    index = close
+  }
+  return out
+}
+
+function scopeStyleElements(markup: string): string {
+  return markup.replace(/(<style\b[^>]*>)([\s\S]*?)(<\/style>)/g, (_, open: string, css: string, close: string) => `${open}${scopeTypstStyles(css)}${close}`)
+}
+
 export function splitTypstSvgIntoPages(svg: string): string[] {
+  return splitPages(svg).map(scopeStyleElements)
+}
+
+function splitPages(svg: string): string[] {
   const rootOpen = svg.match(/<svg\b(?:"[^"]*"|'[^']*'|[^'">])*>/)
   const rootClose = svg.lastIndexOf('</svg>')
   if (!rootOpen || rootOpen.index === undefined || rootClose === -1) return svg ? [svg] : []

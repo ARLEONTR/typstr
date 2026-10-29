@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { splitTypstSvgIntoPages } from './typstSvgPages.ts'
+import { scopeTypstStyles, splitTypstSvgIntoPages } from './typstSvgPages.ts'
 
 const document = [
   '<svg style="overflow: visible;" class="typst-doc" viewBox="0 0 596.000 1684.000" width="596.000" height="1684.000" data-width="596.000" data-height="1684.000" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">',
@@ -45,4 +45,17 @@ test('each page only carries the glyphs it references', () => {
 test('SVG without page groups is returned unchanged', () => {
   const svg = '<svg viewBox="0 0 1 1"><path d="M0 0"/></svg>'
   assert.deepEqual(splitTypstSvgIntoPages(svg), [svg])
+})
+
+test('the preview stylesheet only applies inside the preview', () => {
+  const css = '.typst-text {\n  pointer-events: bounding-box;\n}\n.tsel span,\n.tsel {\n  color: transparent;\n}\nsvg {\n  fill: none;\n}\n@keyframes ripple {\n  to {\n    opacity: 0.01;\n  }\n}\n'
+  const scoped = scopeTypstStyles(css)
+  assert.match(scoped, /svg\.typst-doc \{\n {2}fill: none;/)
+  assert.match(scoped, /svg\.typst-doc \.tsel span,\nsvg\.typst-doc \.tsel \{/)
+  assert.match(scoped, /svg\.typst-doc \.typst-text \{/)
+  assert.match(scoped, /@keyframes ripple \{\n {2}to \{/)
+  assert.doesNotMatch(scoped, /(^|\n)svg \{/)
+
+  const [page] = splitTypstSvgIntoPages(document.replace('.typst-doc > g { fill: none }', css))
+  assert.match(page, /svg\.typst-doc \{/)
 })
