@@ -23,7 +23,7 @@ import CitationSearchPopup from './CitationSearchPopup'
 import { TasksPanel } from './TasksPanel'
 import PreviewErrorBoundary from './PreviewErrorBoundary'
 import { convertLatexSnippetToTypst, explainCompileDiagnostic, type EditorSignatureHint } from './editorLearning'
-import { locateClickInSources, previewPhrasesAt } from '../../typstPreviewSync'
+import { buildPreviewIndex, buildSourceIndex, previewToSource, sourceToPreview, type SourceFile } from '../../typstPreviewSync'
 import { collectDroppedFiles, runWithConcurrency, type DroppedUpload, type UploadItem } from '../../droppedFiles'
 import { logger } from '../../logger'
 
@@ -2589,6 +2589,43 @@ function ProjectWorkspace({
     }
   }, [activeFile.id, canRender, compileTargetFile.id, project.id, projectSearchIndex])
 
+  // Preview <-> editor sync needs the text of every Typst file the document
+  // includes, not only the open ones.
+  const typstSyncFileIds = useMemo(
+    () => project.files.filter((file) => isRenderableTypstFile(file)).map((file) => file.id).join(','),
+    [project.files],
+  )
+  useEffect(() => {
+    if (!canRender || canRenderLatex || !typstSyncFileIds) {
+      return
+    }
+    const missing = typstSyncFileIds.split(',').filter((id) => id !== activeFile.id && projectSearchIndex[id] === undefined)
+    if (missing.length === 0) {
+      return
+    }
+
+    let cancelled = false
+    void Promise.all(missing.map(async (fileId) => {
+      const response = await apiClient.get<string>(`/api/projects/${project.id}/files/${fileId}/content`, { responseType: 'text' })
+      return [fileId, response.data] as const
+    }))
+      .then((entries) => {
+        if (cancelled) return
+        setProjectSearchIndex((current) => {
+          const next = { ...current }
+          for (const [fileId, content] of entries) {
+            if (next[fileId] === undefined) next[fileId] = content
+          }
+          return next
+        })
+      })
+      .catch(() => undefined)
+
+    return () => {
+      cancelled = true
+    }
+  }, [activeFile.id, canRender, canRenderLatex, project.id, projectSearchIndex, typstSyncFileIds])
+
   const prevIsCompilingRef = useRef(false)
   const lastEcosystemRefreshAtRef = useRef(0)
   const prevCompileErrorRef = useRef<string | null>(null)
@@ -3802,32 +3839,31 @@ function ProjectWorkspace({
     return () => window.clearTimeout(timer)
   }, [activeFile.id, canCollaborateInEditor, synced])
 
-  // Preview -> editor: go to the clicked letter, in whichever Typst file holds it.
+  // Preview <-> editor sync over the whole document (main file with its
+  // #include'd files inlined), so sub-documents and repeated phrases map to
+  // the right place.
+  const previewIndex = useMemo(() => buildPreviewIndex(pages), [pages])
+  const typstSyncSources = useCallback((): SourceFile[] => project.files
+    .filter((file) => isRenderableTypstFile(file))
+    .map((file) => ({
+      id: file.id,
+      path: file.path,
+      text: file.id === activeFile.id ? ytext.toString() : (projectSearchIndex[file.id] ?? ''),
+    })), [activeFile.id, project.files, projectSearchIndex, ytext])
+
   const suppressPreviewRevealUntilRef = useRef(0)
-  const handleSvgTextClick = useCallback(({ text, offset }: { page: number; text: string; offset: number }) => {
-    if (!text) return
-    const typstFiles = project.files.filter((file) => isRenderableTypstFile(file))
-    const ordered = [
-      activeFile,
-      compileTargetFile,
-      ...typstFiles.filter((file) => file.id !== activeFile.id && file.id !== compileTargetFile.id),
-    ].filter((file, index, all) => isRenderableTypstFile(file) && all.findIndex((other) => other.id === file.id) === index)
-    const sources = ordered
-      .map((file) => ({
-        id: file.id,
-        path: file.path,
-        text: file.id === activeFile.id ? ytext.toString() : (projectSearchIndex[file.id] ?? ''),
-      }))
-      .filter((file) => file.text)
-    const location = locateClickInSources(text, offset, sources)
+  const handleSvgTextClick = useCallback(({ page, run, offset }: { page: number; run: number; text: string; offset: number }) => {
+    const sources = typstSyncSources()
+    const location = previewToSource(previewIndex, { page, run, offset }, buildSourceIndex(compileTargetFile.path, sources), sources)
     if (!location) return
     suppressPreviewRevealUntilRef.current = Date.now() + 1500
     revealInFile(location.fileId, location.line, location.column)
-  }, [activeFile, compileTargetFile, project.files, projectSearchIndex, revealInFile, ytext])
+  }, [compileTargetFile.path, previewIndex, revealInFile, typstSyncSources])
 
-  // Editor -> preview: when the cursor moves to another line, show that text
-  // in the WebAssembly preview.
-  const [previewReveal, setPreviewReveal] = useState<{ phrases: string[]; nonce: number } | null>(null)
+  // Editor -> preview: when the cursor is moved to another line (not while
+  // typing, when the preview may not show the new text yet), show that text.
+  const lastEditAtRef = useRef(0)
+  const [previewReveal, setPreviewReveal] = useState<{ page: number; run: number; nonce: number } | null>(null)
   const previewRevealLineRef = useRef<string | null>(null)
   useEffect(() => {
     if (!activeIsRenderableTypstFile || previewMode !== 'svg' || prefersTinymistPreview) return
@@ -3835,12 +3871,21 @@ function ProjectWorkspace({
     if (previewRevealLineRef.current === lineKey) return
     const timer = window.setTimeout(() => {
       previewRevealLineRef.current = lineKey
-      if (Date.now() < suppressPreviewRevealUntilRef.current) return
-      const phrases = previewPhrasesAt(ytext.toString(), cursorLocation.line, cursorLocation.column)
-      if (phrases.length > 0) setPreviewReveal({ phrases, nonce: Date.now() })
-    }, 350)
+      const now = Date.now()
+      if (now < suppressPreviewRevealUntilRef.current || now - lastEditAtRef.current < 1500) return
+      const sources = typstSyncSources()
+      const target = sourceToPreview(
+        buildSourceIndex(compileTargetFile.path, sources),
+        activeFile.id,
+        ytext.toString(),
+        cursorLocation.line,
+        cursorLocation.column,
+        previewIndex,
+      )
+      if (target) setPreviewReveal({ ...target, nonce: now })
+    }, 300)
     return () => window.clearTimeout(timer)
-  }, [activeFile.id, activeIsRenderableTypstFile, cursorLocation, prefersTinymistPreview, previewMode, ytext])
+  }, [activeFile.id, activeIsRenderableTypstFile, compileTargetFile.path, cursorLocation, prefersTinymistPreview, previewIndex, previewMode, typstSyncSources, ytext])
 
   // Editor → Preview: tinymist panelScrollTo expects { line, character } (0-based).
   const tinymistCursorPosition = useMemo(() => {
@@ -4831,6 +4876,7 @@ function ProjectWorkspace({
 
   const handleEditorChange = useCallback((source: string) => {
     activeEditorSourceRef.current = source
+    lastEditAtRef.current = Date.now()
 
     // 1. Live real-time Typst WASM compilation (16ms) directly from the source buffer.
     // While a sub-document of the main file is edited, compile the main file
@@ -7074,7 +7120,9 @@ function ProjectWorkspace({
                     ) : (
                       <Suspense fallback={<PanelLoadingMessage message="Loading SVG preview…" compact />}>
                         <SvgPreview
-                          key={`svg:${activeFile.id}:${pageOffset}:${pageCount}`}
+                          // Keyed by the compiled document only: remounting on every page-count
+                          // change or file switch threw away the scroll position.
+                          key={`svg:${compileTargetFile.id}`}
                           pages={pages}
                           pageCount={pageCount}
                           pageOffset={pageOffset}

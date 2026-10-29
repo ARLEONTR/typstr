@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent, type KeyboardEvent, type MouseEvent as ReactMouseEvent } from 'react'
 import styles from './SvgPreview.module.css'
 import { sanitizePreviewSvg } from './svgSanitize'
-import { findPreviewPage, previewPageText } from '../../typstPreviewSync'
 
 /** Parse the aspect ratio (height/width) from a typst SVG string. */
 function parseSvgAspectRatio(svg: string): number | null {
@@ -23,10 +22,10 @@ interface Props {
   pageOffset: number
   compileError: string | null
   isCompiling: boolean
-  /** `offset` is the clicked character within `text`. */
-  onTextClick?: (input: { page: number; text: string; offset: number }) => void
-  /** Scroll to and highlight the first of these phrases found in the preview. */
-  reveal?: { phrases: string[]; nonce: number } | null
+  /** `page` is the index in `pages`, `run` the text run on it, `offset` the clicked character. */
+  onTextClick?: (input: { page: number; run: number; text: string; offset: number }) => void
+  /** Scroll to and highlight a text run (`page` is the index in `pages`). */
+  reveal?: { page: number; run: number; nonce: number } | null
 }
 
 export default function SvgPreview({
@@ -75,8 +74,12 @@ export default function SvgPreview({
       ? fitPagePx
       : fitWidthPx
 
+  // Ref callbacks assign the page elements during commit; clearing the array
+  // in an effect afterwards wiped them on every recompile, so the visible page
+  // was lost (the indicator fell back to page 1 and the wrong pages were
+  // rendered). Only drop entries for pages that no longer exist.
   useEffect(() => {
-    pageRefsRef.current = new Array(pages.length).fill(null)
+    pageRefsRef.current.length = pages.length
   }, [pages])
 
   useEffect(() => {
@@ -221,38 +224,43 @@ export default function SvgPreview({
       }
       offset += before
     }
-    onTextClick({ page, text, offset: Math.min(offset, text.length) })
-  }, [onTextClick])
+    const pageElement = run?.closest(`.${styles.page}`)
+    const runIndex = pageElement ? [...pageElement.querySelectorAll('.tsel')].indexOf(run as Element) : -1
+    if (runIndex === -1) return
+    onTextClick({ page: page - 1 - pageOffset, run: runIndex, text, offset: Math.min(offset, text.length) })
+  }, [onTextClick, pageOffset])
 
-  // Editor -> preview: scroll to the page holding the cursor's text and flash it.
-  const [highlight, setHighlight] = useState<{ page: number; phrase: string; nonce: number } | null>(null)
-  const pageTexts = useMemo(() => pages.map(previewPageText), [pages])
-  const activePageRef = useRef(activePageIndex)
-  activePageRef.current = activePageIndex
+  // Editor -> preview: scroll to the text run and flash it. A request is
+  // carried out once (when its page is rendered) or dropped after a short
+  // while, so it can never move the preview later, during editing.
+  const [highlight, setHighlight] = useState<{ page: number; run: number; expiresAt: number; scrolled: boolean } | null>(null)
   useEffect(() => {
-    if (!reveal || reveal.phrases.length === 0) return
-    const found = findPreviewPage(pageTexts, reveal.phrases, activePageRef.current - pageOffset)
-    if (!found) return
-    scrollToPage(found.page + pageOffset, 'smooth')
-    setHighlight({ page: found.page, phrase: found.phrase, nonce: reveal.nonce })
-  // Only a new reveal request moves the preview, not a recompile.
+    if (!reveal) return
+    setHighlight({ page: reveal.page, run: reveal.run, expiresAt: Date.now() + 2000, scrolled: false })
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [reveal?.nonce])
   useEffect(() => {
     if (!highlight) return
+    if (Date.now() > highlight.expiresAt) {
+      setHighlight(null)
+      return
+    }
     const pageElement = pageRefsRef.current[highlight.page]
-    const runs = pageElement ? [...pageElement.querySelectorAll<HTMLElement>('.tsel')] : []
-    const target = runs.find((run) => (run.textContent ?? '').replace(/\s+/g, ' ').includes(highlight.phrase))
-      ?? runs.find((run) => highlight.phrase.split(' ').some((word) => word.length > 3 && (run.textContent ?? '').includes(word)))
-    if (!target) return
-    const box = target.closest('foreignObject') ?? target
-    box.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    const target = pageElement?.querySelectorAll<HTMLElement>('.tsel')[highlight.run]
+    if (!target) {
+      // Not rendered yet: bring the page into view first (pages near the
+      // visible one only are rendered).
+      if (!highlight.scrolled) {
+        scrollToPage(highlight.page + pageOffset, 'auto')
+        setHighlight({ ...highlight, scrolled: true })
+      }
+      return
+    }
+    ;(target.closest('foreignObject') ?? target).scrollIntoView({ behavior: 'smooth', block: 'center' })
     target.classList.add(styles.syncFlash)
     window.setTimeout(() => target.classList.remove(styles.syncFlash), 1600)
-    // Done; later recompiles must not flash it again.
     setHighlight(null)
-  // Retried when the page is rendered (pages near the visible one only).
-  }, [highlight, safePages, activePageIndex])
+  }, [highlight, safePages, activePageIndex, pageOffset, scrollToPage])
 
   if (compileError && pages.length === 0) {
     return (

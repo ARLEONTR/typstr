@@ -322,12 +322,14 @@ export default function CodeMirrorEditor({
       const head = Math.min(endLine.to, endLine.from + endColumnOffset)
       view.dispatch({
         selection: EditorSelection.range(anchor, head),
-        scrollIntoView: true,
+        effects: EditorView.scrollIntoView(anchor, { y: 'center' }),
       })
     } else {
+      // Center the target line; the default scrolls only until it is
+      // visible, which leaves it at the bottom edge.
       view.dispatch({
         selection: EditorSelection.cursor(anchor),
-        scrollIntoView: true,
+        effects: EditorView.scrollIntoView(anchor, { y: 'center' }),
       })
       view.focus()
     }
