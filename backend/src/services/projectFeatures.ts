@@ -136,6 +136,7 @@ type ProjectTemplatePublicationRow = {
   citation_style: string | null
   page_limit: number | null
   created_at: number
+  updated_at: number
 }
 
 const PROJECT_TEMPLATES: TemplateDefinition[] = [
@@ -456,6 +457,7 @@ function projectTemplateSummary(template: TemplateDefinition): ProjectTemplate {
     currentUserVote: template.currentUserVote,
     authorName: template.authorName,
     publishedAt: template.publishedAt,
+    format: /\.(tex|ltx|latex)$/i.test(template.mainFilePath) ? 'latex' : 'typst',
   }
 }
 
@@ -483,12 +485,25 @@ async function listCommunityTemplates(userId?: string): Promise<ProjectTemplate[
     styleProfileId: row.style_profile_id,
     citationStyle: row.citation_style,
     pageLimit: row.page_limit,
-    requiredSections: inferSectionsFromFilesJson(row.files_json),
+    requiredSections: cachedTemplateSections(row),
     voteCount: Number(row.score ?? 0),
     currentUserVote: row.current_user_vote === -1 ? -1 : row.current_user_vote === 1 ? 1 : 0,
     authorName: row.author_name,
     publishedAt: row.created_at,
+    format: /\.(tex|ltx|latex)$/i.test(row.main_file_path) ? 'latex' : 'typst',
   }))
+}
+
+// The dashboard lists every template on each load; parsing each files_json
+// (which can hold base64 images) every time is wasted work.
+const templateSectionsCache = new Map<string, { version: string; sections: string[] }>()
+function cachedTemplateSections(row: ProjectTemplatePublicationRow): string[] {
+  const version = String(row.updated_at)
+  const cached = templateSectionsCache.get(row.id)
+  if (cached && cached.version === version) return cached.sections
+  const sections = inferSectionsFromFilesJson(row.files_json)
+  templateSectionsCache.set(row.id, { version, sections })
+  return sections
 }
 
 async function getCommunityTemplateDefinition(templateId: string, userId?: string): Promise<TemplateDefinition | null> {

@@ -484,6 +484,8 @@ export interface ProjectTemplate {
   currentUserVote: -1 | 0 | 1
   authorName: string | null
   publishedAt: number | null
+  /** Source format of the template's main file. */
+  format?: 'typst' | 'latex'
 }
 
 export interface ProjectActivityEvent {

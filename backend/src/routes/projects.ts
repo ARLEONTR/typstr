@@ -470,7 +470,10 @@ projectsRouter.post('/', async (req, res, next) => {
       return res.status(403).json({ error: 'You are not a member of that team workspace' })
     }
     await assertCanCreateProject(user.id)
-    const project = projectFormat === 'typst' && templateId !== 'blank'
+    // Community templates carry their own files in either format; built-in
+    // LaTeX starters are written over a blank project below.
+    const isCommunityTemplate = templateId.startsWith('community:')
+    const project = (projectFormat === 'typst' && templateId !== 'blank') || isCommunityTemplate
       ? await createProjectFromTemplate({
           ownerUserId: user.id,
           title,
@@ -484,12 +487,14 @@ projectsRouter.post('/', async (req, res, next) => {
           teamId,
         })
     if (projectFormat !== 'typst') {
-      await initializeProjectMainFileFormat({
-        projectId: project.id,
-        ownerUserId: user.id,
-        format: projectFormat,
-        templateId,
-      })
+      if (!isCommunityTemplate) {
+        await initializeProjectMainFileFormat({
+          projectId: project.id,
+          ownerUserId: user.id,
+          format: projectFormat,
+          templateId,
+        })
+      }
       await updateProjectCompileSettings(project.id, {
         autoCompile: false,
         compileDebounceMs: project.compileSettings.compileDebounceMs,

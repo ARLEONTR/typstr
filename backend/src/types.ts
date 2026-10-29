@@ -459,6 +459,8 @@ export interface ProjectTemplate {
   currentUserVote: -1 | 0 | 1
   authorName: string | null
   publishedAt: number | null
+  /** Source format of the template's main file. */
+  format?: 'typst' | 'latex'
 }
 
 export type BackgroundJobType = 'save-file' | 'generate-pdf-snapshot' | 'compile-project' | 'export-document' | 'invite-sync' | 'drive-permission-sync' | 'retention'

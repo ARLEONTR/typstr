@@ -1616,6 +1616,8 @@ export default function DocumentList() {
                         <select className={styles.modalInput} value={selectedProjectFormat} onChange={(event) => {
                           const val = event.target.value as ProjectFormat
                           setSelectedProjectFormat(val)
+                          // Templates differ per format; do not carry a selection across.
+                          setSelectedTemplateId('blank')
                         }}>
                           <option value="typst">Typst</option>
                           <option value="latex">LaTeX</option>
@@ -1630,9 +1632,9 @@ export default function DocumentList() {
                     
                     <div className={styles.modalTemplateGallery} style={{ maxHeight: 'none', overflowY: 'visible', marginTop: 24 }}>
                       {(selectedProjectFormat === 'typst'
-                        ? dashboard.templates
+                        ? dashboard.templates.filter((template) => template.format !== 'latex')
                         : selectedProjectFormat === 'latex'
-                          ? LATEX_TEMPLATE_OPTIONS
+                          ? [...LATEX_TEMPLATE_OPTIONS, ...dashboard.templates.filter((template) => template.format === 'latex')]
                           : LATEX_TEMPLATE_OPTIONS.slice(0, 1)
                       ).map((template) => (
                         <button
