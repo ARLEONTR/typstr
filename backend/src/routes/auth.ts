@@ -4,6 +4,7 @@ import type { CookieOptions } from 'express-session'
 import passport from 'passport'
 import { OAuth2Client } from 'google-auth-library'
 import { establishLocalDevSession, loginWithSessionRegenerate, requireAuth, SESSION_COOKIE_NAME } from '../auth.js'
+import { clearLoginFailures, loginRetryAfterSeconds, recordLoginFailure } from '../middleware/loginThrottle.js'
 import { disableUserByGoogleId, findUserById, linkUserOrcid, sanitizeUser, unlinkUserOrcid, upsertLdapUser } from '../db.js'
 import { env, isGoogleAuthConfigured, isLdapConfigured, isLocalAuthBypassEnabled, isOrcidAuthConfigured } from '../env.js'
 import { logger } from '../logger.js'
@@ -120,11 +121,19 @@ authRouter.post('/ldap/login', async (req, res, next) => {
     return res.status(400).json({ error: passwordResult.error })
   }
 
+  const retryAfter = loginRetryAfterSeconds(usernameResult.value, req.ip)
+  if (retryAfter > 0) {
+    res.setHeader('Retry-After', retryAfter)
+    return res.status(429).json({ error: 'Too many failed sign-in attempts. Please try again later.' })
+  }
+
   try {
     const ldapResult = await authenticateLdap(usernameResult.value, passwordResult.value)
     if (!ldapResult) {
+      recordLoginFailure(usernameResult.value, req.ip)
       return res.status(401).json({ error: 'Invalid username or password.' })
     }
+    clearLoginFailures(usernameResult.value)
 
     const user = await upsertLdapUser({
       ldapId: ldapResult.ldapId,

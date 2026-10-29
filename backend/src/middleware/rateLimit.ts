@@ -1,6 +1,14 @@
 import type { Request, Response, NextFunction } from 'express'
 
-const buckets = new Map<string, { count: number; windowStart: number }>()
+const buckets = new Map<string, { count: number; windowStart: number; windowMs: number }>()
+
+// Drop finished windows so the map does not grow with every client seen.
+setInterval(() => {
+  const now = Date.now()
+  for (const [key, bucket] of buckets) {
+    if (now - bucket.windowStart >= bucket.windowMs) buckets.delete(key)
+  }
+}, 60_000).unref()
 
 export function createRateLimitMiddleware(input: {
   id: string
@@ -17,7 +25,7 @@ export function createRateLimitMiddleware(input: {
     const current = buckets.get(key)
 
     if (!current || now - current.windowStart >= input.windowMs) {
-      buckets.set(key, { count: 1, windowStart: now })
+      buckets.set(key, { count: 1, windowStart: now, windowMs: input.windowMs })
       next()
       return
     }

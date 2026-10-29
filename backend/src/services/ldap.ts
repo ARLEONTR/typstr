@@ -58,8 +58,9 @@ export async function authenticateLdap(username: string, password: string): Prom
         ],
       })
 
-      if (searchEntries.length === 0) {
-        logger.warning(`[LDAP] User not found for filter: ${searchFilter}`)
+      if (searchEntries.length !== 1) {
+        // Several matches (e.g. one user's cn equal to another's uid) are ambiguous.
+        logger.warning(`[LDAP] ${searchEntries.length === 0 ? 'User not found' : 'Ambiguous user'} for filter: ${searchFilter}`)
         await adminClient.unbind().catch(() => {})
         return null
       }
