@@ -108,7 +108,13 @@ type TemplateFileDefinition = {
   path: string
   mimeType: string
   content: string
+  /** Binary files (images, PDFs, fonts) are stored base64-encoded. */
+  encoding?: 'base64'
 }
+
+// Binary files published with a template; larger files are left out.
+const TEMPLATE_BINARY_FILE_MAX_BYTES = 5 * 1024 * 1024
+const TEMPLATE_BINARY_TOTAL_MAX_BYTES = 20 * 1024 * 1024
 
 type TemplateDefinition = ProjectTemplate & {
   files: TemplateFileDefinition[]
@@ -551,9 +557,11 @@ function parseTemplateFilesJson(raw: string): TemplateFileDefinition[] {
 }
 
 function inferSectionsFromFilesJson(raw: string): string[] {
-  const files = parseTemplateFilesJson(raw)
+  const files = parseTemplateFilesJson(raw).filter((file) => file.encoding !== 'base64')
   const source = files.map((file) => file.content).join('\n')
-  return [...source.matchAll(/^=+\s+(.+)$/gm)].map((match) => match[1].trim()).slice(0, 8)
+  return [...source.matchAll(/^(?:=+\s+(.+)|\\(?:chapter|section)\*?\{([^}]+)\})$/gm)]
+    .map((match) => (match[1] ?? match[2]).trim())
+    .slice(0, 8)
 }
 
 export async function listProjectTemplates(userId?: string): Promise<ProjectTemplate[]> {
@@ -629,23 +637,42 @@ export async function publishProjectTemplate(input: {
   }
 
   const files = await listProjectFiles(input.projectId)
-  const textFiles = files.filter((file) => file.mimeType.startsWith('text/') || /\.(typ|txt|md|yaml|yml|toml|json|bib)$/i.test(file.name))
+  const isTextFile = (file: ProjectFile) => file.mimeType.startsWith('text/') || /\.(typ|txt|md|yaml|yml|toml|json|bib)$/i.test(file.name)
   const templateFiles: TemplateFileDefinition[] = []
-  for (const file of textFiles) {
-    const content = await readTextFileFromDrive(project.ownerUserId, file.driveFileId)
+  let binaryBytes = 0
+  for (const file of files) {
+    if (file.mimeType === DRIVE_FOLDER_MIME_TYPE || file.path.startsWith(`${TRASH_PATH_PREFIX}/`)) {
+      continue
+    }
+    if (isTextFile(file)) {
+      templateFiles.push({
+        path: file.path,
+        mimeType: file.mimeType,
+        content: await readTextFileFromDrive(project.ownerUserId, file.driveFileId),
+      })
+      continue
+    }
+    // Images and other assets the template's sources refer to.
+    const content = await readFileBufferFromDrive(project.ownerUserId, file.driveFileId)
+    if (content.length > TEMPLATE_BINARY_FILE_MAX_BYTES || binaryBytes + content.length > TEMPLATE_BINARY_TOTAL_MAX_BYTES) {
+      continue
+    }
+    binaryBytes += content.length
     templateFiles.push({
       path: file.path,
       mimeType: file.mimeType,
-      content,
+      content: content.toString('base64'),
+      encoding: 'base64',
     })
   }
 
-  if (templateFiles.length === 0) {
+  const textTemplateFiles = templateFiles.filter((file) => file.encoding !== 'base64')
+  if (textTemplateFiles.length === 0) {
     throw new Error('Project has no text files that can be published as a template')
   }
 
-  const mainFilePath = files.find((file) => file.id === project.mainFileId)?.path ?? templateFiles[0].path
-  const previewSource = templateFiles.find((file) => file.path === mainFilePath)?.content ?? templateFiles[0].content
+  const mainFilePath = files.find((file) => file.id === project.mainFileId)?.path ?? textTemplateFiles[0].path
+  const previewSource = textTemplateFiles.find((file) => file.path === mainFilePath)?.content ?? textTemplateFiles[0].content
   const now = Date.now()
   const id = `community:${randomUUID()}`
   const state = await getProjectState(input.projectId)
@@ -730,14 +757,14 @@ export async function createProjectFromTemplate(input: {
   for (const file of sortedFiles) {
     const parentPath = parentDirectoryPath(file.path)
     const parentDriveId = await ensureProjectFolderPath(input.ownerUserId, project.id, driveFolderId, folderIds, parentPath)
-    const driveFileId = file.mimeType.startsWith('text/')
+    const driveFileId = file.encoding !== 'base64' && file.mimeType.startsWith('text/')
       ? await createTextFileInDrive(input.ownerUserId, parentDriveId, path.posix.basename(file.path), file.content)
       : await createBinaryFileInDrive({
           userId: input.ownerUserId,
           parentId: parentDriveId,
           name: path.posix.basename(file.path),
           mimeType: file.mimeType,
-          content: Buffer.from(file.content),
+          content: Buffer.from(file.content, file.encoding === 'base64' ? 'base64' : 'utf8'),
         })
 
     const created = await createProjectFile({
