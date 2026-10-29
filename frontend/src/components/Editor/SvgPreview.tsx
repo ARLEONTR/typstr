@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent, type KeyboardEvent, type MouseEvent as ReactMouseEvent } from 'react'
 import styles from './SvgPreview.module.css'
 import { sanitizePreviewSvg } from './svgSanitize'
+import { findPreviewPage, previewPageText } from '../../typstPreviewSync'
 
 /** Parse the aspect ratio (height/width) from a typst SVG string. */
 function parseSvgAspectRatio(svg: string): number | null {
@@ -22,7 +23,10 @@ interface Props {
   pageOffset: number
   compileError: string | null
   isCompiling: boolean
-  onTextClick?: (input: { page: number; text: string }) => void
+  /** `offset` is the clicked character within `text`. */
+  onTextClick?: (input: { page: number; text: string; offset: number }) => void
+  /** Scroll to and highlight the first of these phrases found in the preview. */
+  reveal?: { phrases: string[]; nonce: number } | null
 }
 
 export default function SvgPreview({
@@ -32,6 +36,7 @@ export default function SvgPreview({
   compileError,
   isCompiling,
   onTextClick,
+  reveal,
 }: Props) {
   const pageRefsRef = useRef<(HTMLDivElement | null)[]>([])
   const pageViewportRef = useRef<HTMLDivElement | null>(null)
@@ -182,12 +187,72 @@ export default function SvgPreview({
 
   const handlePreviewClick = useCallback((event: ReactMouseEvent<HTMLDivElement>, page: number) => {
     if (!onTextClick) return
-    const target = event.target as HTMLElement | null
-    const textNode = target?.closest?.('text,tspan')
-    const text = (textNode?.textContent ?? target?.textContent ?? '').replace(/\s+/g, ' ').trim()
-    if (!text) return
-    onTextClick({ page, text: text.slice(0, 240) })
+    // The text layer (.tsel) lies over the glyphs; find the character under
+    // the pointer so the editor can go to that letter.
+    const doc = document as Document & {
+      caretPositionFromPoint?: (x: number, y: number) => { offsetNode: Node; offset: number } | null
+    }
+    let node: Node | null = null
+    let offset = 0
+    const position = doc.caretPositionFromPoint?.(event.clientX, event.clientY)
+    if (position) {
+      node = position.offsetNode
+      offset = position.offset
+    } else {
+      const range = document.caretRangeFromPoint?.(event.clientX, event.clientY)
+      if (range) {
+        node = range.startContainer
+        offset = range.startOffset
+      }
+    }
+    let run = (node?.nodeType === Node.TEXT_NODE ? node.parentElement : node as Element | null)?.closest?.('.tsel') ?? null
+    if (!run) {
+      run = (event.target as Element | null)?.closest?.('.tsel') ?? null
+      offset = 0
+    }
+    const text = run?.textContent ?? ''
+    if (!text.trim()) return
+    if (node && run?.contains(node) && node.nodeType === Node.TEXT_NODE) {
+      // Count the characters of earlier text nodes in the same run.
+      const walker = document.createTreeWalker(run, NodeFilter.SHOW_TEXT)
+      let before = 0
+      for (let current = walker.nextNode(); current && current !== node; current = walker.nextNode()) {
+        before += current.textContent?.length ?? 0
+      }
+      offset += before
+    }
+    onTextClick({ page, text, offset: Math.min(offset, text.length) })
   }, [onTextClick])
+
+  // Editor -> preview: scroll to the page holding the cursor's text and flash it.
+  const [highlight, setHighlight] = useState<{ page: number; phrase: string; nonce: number } | null>(null)
+  const pageTexts = useMemo(() => pages.map(previewPageText), [pages])
+  const activePageRef = useRef(activePageIndex)
+  activePageRef.current = activePageIndex
+  useEffect(() => {
+    if (!reveal || reveal.phrases.length === 0) return
+    const found = findPreviewPage(pageTexts, reveal.phrases, activePageRef.current - pageOffset)
+    if (!found) return
+    scrollToPage(found.page + pageOffset, 'smooth')
+    setHighlight({ page: found.page, phrase: found.phrase, nonce: reveal.nonce })
+  // Only a new reveal request moves the preview, not a recompile.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [reveal?.nonce])
+  useEffect(() => {
+    if (!highlight) return
+    const pageElement = pageRefsRef.current[highlight.page]
+    const runs = pageElement ? [...pageElement.querySelectorAll<HTMLElement>('.tsel')] : []
+    const target = runs.find((run) => (run.textContent ?? '').replace(/\s+/g, ' ').includes(highlight.phrase))
+      ?? runs.find((run) => highlight.phrase.split(' ').some((word) => word.length > 3 && (run.textContent ?? '').includes(word)))
+    if (!target) return
+    const box = target.closest('foreignObject') ?? target
+    box.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    target.classList.add(styles.syncFlash)
+    window.setTimeout(() => target.classList.remove(styles.syncFlash), 1600)
+    // Done; later recompiles must not flash it again.
+    setHighlight(null)
+  // Retried when the page is rendered (pages near the visible one only).
+  }, [highlight, safePages, activePageIndex])
 
   if (compileError && pages.length === 0) {
     return (

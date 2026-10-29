@@ -461,6 +461,18 @@ function normalizeVirtualPath(path: string): string {
   return '/' + resolved.join('/')
 }
 
+// Length plus the first and last characters missed edits in the middle that
+// keep the length (replacing a letter), leaving the preview stale. Hash the
+// whole text (FNV-1a); it is far cheaper than recompiling.
+function textFingerprint(text: string): string {
+  let hash = 0x811c9dc5
+  for (let index = 0; index < text.length; index += 1) {
+    hash ^= text.charCodeAt(index)
+    hash = Math.imul(hash, 0x01000193)
+  }
+  return `text:${text.length}:${(hash >>> 0).toString(36)}`
+}
+
 function syncWorkspaceFiles(
   activeCompiler: Awaited<ReturnType<TypstCompilerBuilder['build']>>,
   source: string,
@@ -476,7 +488,7 @@ function syncWorkspaceFiles(
   const normEntryPath = normalizeVirtualPath(entryPath)
   currentPaths.add(normEntryPath)
   const normSource = normalizeTypstSourceFonts(source)
-  const entryFingerprint = `text:${normSource.length}:${normSource.slice(0, 32)}:${normSource.slice(-32)}`
+  const entryFingerprint = textFingerprint(normSource)
   if (fileContentFingerprintMap.get(normEntryPath) !== entryFingerprint || !virtualFiles.has(normEntryPath)) {
     const encoded = textEncoder.encode(normSource)
     virtualFiles.set(normEntryPath, encoded)
@@ -494,7 +506,7 @@ function syncWorkspaceFiles(
 
     if (typeof file.content === 'string') {
       const normContent = normalizeTypstSourceFonts(file.content)
-      const fingerprint = `text:${normContent.length}:${normContent.slice(0, 32)}:${normContent.slice(-32)}`
+      const fingerprint = textFingerprint(normContent)
       if (fileContentFingerprintMap.get(normPath) !== fingerprint || !virtualFiles.has(normPath)) {
         const encoded = textEncoder.encode(normContent)
         virtualFiles.set(normPath, encoded)

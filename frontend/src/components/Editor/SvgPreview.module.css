@@ -338,3 +338,11 @@
   border-radius: 6px;
   padding: 12px;
 }
+
+/* Editor -> preview: briefly mark the text run that holds the cursor. */
+.syncFlash {
+  outline: 3px solid rgba(255, 196, 0, 0.9);
+  outline-offset: 2px;
+  background: rgba(255, 214, 10, 0.28);
+  transition: background 0.3s;
+}

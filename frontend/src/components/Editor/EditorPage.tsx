@@ -23,6 +23,7 @@ import CitationSearchPopup from './CitationSearchPopup'
 import { TasksPanel } from './TasksPanel'
 import PreviewErrorBoundary from './PreviewErrorBoundary'
 import { convertLatexSnippetToTypst, explainCompileDiagnostic, type EditorSignatureHint } from './editorLearning'
+import { locateClickInSources, previewPhrasesAt } from '../../typstPreviewSync'
 import { collectDroppedFiles, runWithConcurrency, type DroppedUpload, type UploadItem } from '../../droppedFiles'
 import { logger } from '../../logger'
 
@@ -876,6 +877,8 @@ function ProjectWorkspace({
     }
     return projectSearchIndex[compileTargetFile.id] || ''
   }, [activeEditorSource, activeFile.id, compileTargetFile.id, projectSearchIndex, ytext])
+  const compileTargetSourceRef = useRef(compileTargetSource)
+  compileTargetSourceRef.current = compileTargetSource
   const isPdfAsset = isPdfFile(activeFile)
   const saveStatus = isSavingToDrive ? 'saving' : collaborativeSaveStatus
   const dirtyFileId = saveStatus === 'saved' ? null : activeFile.id
@@ -2410,7 +2413,10 @@ function ProjectWorkspace({
     const source = (compileTargetFile.id === activeFile.id ? (activeEditorSource || ytext.toString()) : '') || projectSearchIndex[compileTargetFile.id] || ''
     if (!source.trim()) return
     initialCompileFiredFileRef.current = compileTargetFile.id
-    compileNow(source, compileContextWithActiveSource(source))
+    // The override is the active file's own text (a sub-document when the
+    // main file is the compile target), never the main file's text.
+    const activeText = compileTargetFile.id === activeFile.id ? source : (activeEditorSource || ytext.toString())
+    compileNow(source, compileContextWithActiveSource(activeText))
   }, [activeEditorSource, activeFile.id, canCollaborateInEditor, canRender, canRenderLatex, compileContextWithActiveSource, compileNow, compileTargetFile.id, projectSearchIndex, synced, ytext])
 
   const latexInitialSourceRef = useRef<string | null>(null)
@@ -3773,21 +3779,68 @@ function ProjectWorkspace({
     setTinymistContextMenu(null)
   }, [activeFile.id, openTinymistComment, projectSearchIndex, ytext])
 
-  const handleSvgTextClick = useCallback(({ text }: { page: number; text: string }) => {
-    if (!text) return
-    const currentSource = activeFile.id === compileTargetFile.id ? ytext.toString() : (projectSearchIndex[activeFile.id] ?? '')
-    if (!currentSource) return
-
-    const searchSnippet = text.slice(0, 40).trim()
-    const index = currentSource.indexOf(searchSnippet)
-    if (index !== -1) {
-      const upTo = currentSource.slice(0, index)
-      const lines = upTo.split('\n')
-      const line = lines.length
-      const column = (lines[lines.length - 1]?.length ?? 0) + 1
+  // A location in another file is applied once that file's text has loaded;
+  // set immediately it landed on the still-empty editor and became line 1.
+  const pendingRevealRef = useRef<{ fileId: string; line: number; column: number } | null>(null)
+  const revealInFile = useCallback((fileId: string, line: number, column = 1) => {
+    if (fileId === activeFile.id) {
       setRevealLocation({ line, column, nonce: Date.now() })
+      return
     }
-  }, [activeFile.id, compileTargetFile.id, projectSearchIndex, ytext])
+    pendingRevealRef.current = { fileId, line, column }
+    onSelectFile(fileId)
+  }, [activeFile.id, onSelectFile])
+  useEffect(() => {
+    const pending = pendingRevealRef.current
+    if (!pending || pending.fileId !== activeFile.id) return
+    if (canCollaborateInEditor && !synced) return
+    const timer = window.setTimeout(() => {
+      if (pendingRevealRef.current !== pending) return
+      pendingRevealRef.current = null
+      setRevealLocation({ line: pending.line, column: pending.column, nonce: Date.now() })
+    }, 120)
+    return () => window.clearTimeout(timer)
+  }, [activeFile.id, canCollaborateInEditor, synced])
+
+  // Preview -> editor: go to the clicked letter, in whichever Typst file holds it.
+  const suppressPreviewRevealUntilRef = useRef(0)
+  const handleSvgTextClick = useCallback(({ text, offset }: { page: number; text: string; offset: number }) => {
+    if (!text) return
+    const typstFiles = project.files.filter((file) => isRenderableTypstFile(file))
+    const ordered = [
+      activeFile,
+      compileTargetFile,
+      ...typstFiles.filter((file) => file.id !== activeFile.id && file.id !== compileTargetFile.id),
+    ].filter((file, index, all) => isRenderableTypstFile(file) && all.findIndex((other) => other.id === file.id) === index)
+    const sources = ordered
+      .map((file) => ({
+        id: file.id,
+        path: file.path,
+        text: file.id === activeFile.id ? ytext.toString() : (projectSearchIndex[file.id] ?? ''),
+      }))
+      .filter((file) => file.text)
+    const location = locateClickInSources(text, offset, sources)
+    if (!location) return
+    suppressPreviewRevealUntilRef.current = Date.now() + 1500
+    revealInFile(location.fileId, location.line, location.column)
+  }, [activeFile, compileTargetFile, project.files, projectSearchIndex, revealInFile, ytext])
+
+  // Editor -> preview: when the cursor moves to another line, show that text
+  // in the WebAssembly preview.
+  const [previewReveal, setPreviewReveal] = useState<{ phrases: string[]; nonce: number } | null>(null)
+  const previewRevealLineRef = useRef<string | null>(null)
+  useEffect(() => {
+    if (!activeIsRenderableTypstFile || previewMode !== 'svg' || prefersTinymistPreview) return
+    const lineKey = `${activeFile.id}:${cursorLocation.line}`
+    if (previewRevealLineRef.current === lineKey) return
+    const timer = window.setTimeout(() => {
+      previewRevealLineRef.current = lineKey
+      if (Date.now() < suppressPreviewRevealUntilRef.current) return
+      const phrases = previewPhrasesAt(ytext.toString(), cursorLocation.line, cursorLocation.column)
+      if (phrases.length > 0) setPreviewReveal({ phrases, nonce: Date.now() })
+    }, 350)
+    return () => window.clearTimeout(timer)
+  }, [activeFile.id, activeIsRenderableTypstFile, cursorLocation, prefersTinymistPreview, previewMode, ytext])
 
   // Editor → Preview: tinymist panelScrollTo expects { line, character } (0-based).
   const tinymistCursorPosition = useMemo(() => {
@@ -4146,9 +4199,8 @@ function ProjectWorkspace({
       return
     }
 
-    onSelectFile(targetFile.id)
-    setRevealLocation({ line, column: 1, nonce: Date.now() })
-  }, [onSelectFile, project.files])
+    revealInFile(targetFile.id, line)
+  }, [project.files, revealInFile])
 
   const handleUpsertProjectTextFile = useCallback(async (
     filePath: string,
@@ -4780,14 +4832,19 @@ function ProjectWorkspace({
   const handleEditorChange = useCallback((source: string) => {
     activeEditorSourceRef.current = source
 
-    // 1. Live real-time Typst WASM compilation (16ms) directly from the source buffer
+    // 1. Live real-time Typst WASM compilation (16ms) directly from the source buffer.
+    // While a sub-document of the main file is edited, compile the main file
+    // with the edited text in place, so references, numbering and the
+    // bibliography defined elsewhere in the document still resolve.
     if (activeIsRenderableTypstFile && previewMode === 'svg') {
       if (typstLiveCompileTimerRef.current !== null) {
         window.clearTimeout(typstLiveCompileTimerRef.current)
       }
       typstLiveCompileTimerRef.current = window.setTimeout(() => {
         typstLiveCompileTimerRef.current = null
-        compileNow(source, compileContextWithActiveSource(source))
+        const entrySource = compileTargetFile.id === activeFile.id ? source : compileTargetSourceRef.current
+        if (!entrySource.trim()) return
+        compileNow(entrySource, compileContextWithActiveSource(source))
       }, 16)
     }
 
@@ -4841,7 +4898,7 @@ function ProjectWorkspace({
         })
         .catch(() => undefined)
     }, 350)
-  }, [activeFile, activeIsRenderableTypstFile, canEdit, clearMutationNotice, compileContextWithActiveSource, compileNow, isOnline, previewMode, project.id])
+  }, [activeFile, activeIsRenderableTypstFile, canEdit, clearMutationNotice, compileContextWithActiveSource, compileNow, compileTargetFile.id, isOnline, previewMode, project.id])
 
   const handleSuggestionDecision = useCallback(async (suggestionId: string, action: 'accept' | 'reject') => {
     try {
@@ -7024,6 +7081,7 @@ function ProjectWorkspace({
                           compileError={visibleCompileError}
                           isCompiling={isCompiling}
                           onTextClick={handleSvgTextClick}
+                          reveal={previewReveal}
                         />
                       </Suspense>
                     )}
