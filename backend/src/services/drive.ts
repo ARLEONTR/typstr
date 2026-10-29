@@ -12,7 +12,8 @@ import type { ProjectRole, UserRecord } from '../types.js'
 const driveFileBufferCache = new LRUCache<string, Buffer>({
   max: 300,
   maxSize: 64 * 1024 * 1024,
-  sizeCalculation: (val) => val.length,
+  // lru-cache rejects a size of 0, so an empty file failed to load.
+  sizeCalculation: (val) => Math.max(1, val.length),
   ttl: 1000 * 60 * 30, // 30 minutes
 })
 
