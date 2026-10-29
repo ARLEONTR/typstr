@@ -61,6 +61,8 @@ services:
       SMTP_PASSWORD: "${SMTP_PASSWORD:-}"
       SMTP_FROM: "${SMTP_FROM:-Typstr <typstr@arleon.com.tr>}"
       REQUEST_BODY_LIMIT_MB: "${REQUEST_BODY_LIMIT_MB:-64}"
+      UPLOAD_LIMIT_MB: "${UPLOAD_LIMIT_MB:-64}"
+      ZIP_IMPORT_LIMIT_MB: "${ZIP_IMPORT_LIMIT_MB:-256}"
       TINYMIST_BIN: "${TINYMIST_BIN:-/usr/local/bin/tinymist}"
       TEXLAB_BIN: "${TEXLAB_BIN:-/usr/local/bin/texlab}"
       ADMIN_EMAILS: "${ADMIN_EMAILS:-}"

@@ -93,7 +93,8 @@ export async function createApp() {
     const isInternalError = typedError.severity !== undefined || typedError.syscall !== undefined
     const internalMessage = err instanceof Error ? err.message : 'Unexpected server error'
     const message = isInternalError ? 'Unexpected server error' : internalMessage
-    const status = typedError.status ?? (/auth|forbidden|denied/i.test(message) ? 401 : 500)
+    const isUploadTooLarge = typedError.code === 'LIMIT_FILE_SIZE' || (err as { type?: string }).type === 'entity.too.large'
+    const status = isUploadTooLarge ? 413 : typedError.status ?? (/auth|forbidden|denied/i.test(message) ? 401 : 500)
     try {
       const reliability = await import('./services/reliability.js')
       await reliability.recordErrorEvent({

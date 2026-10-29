@@ -1,8 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import path from 'node:path'
-import JSZip from 'jszip'
 import * as Y from 'yjs'
-import { applySourceToCollaborationState } from '../collaboration.js'
+import { applySourceToCollaborationState, hocuspocusServer } from '../collaboration.js'
 import {
   createProject,
   createProjectFile,
@@ -30,6 +29,7 @@ import {
   writeTextFileToDrive,
 } from './drive.js'
 import { chooseAutomaticMainFile } from './projectMainFile.js'
+import { decodeProjectText, openProjectZip } from './zipImport.js'
 import type {
   ProjectActivityEvent,
   ProjectChatMessage,
@@ -765,8 +765,8 @@ export async function importProjectZip(input: {
   title: string
   zipBuffer: Buffer
 }): Promise<ProjectSummary> {
-  const zip = await JSZip.loadAsync(input.zipBuffer)
-  const entries = Object.values(zip.files).filter((entry) => !entry.name.startsWith('__MACOSX/'))
+  // Validate the archive before anything is created.
+  const entries = await openProjectZip(input.zipBuffer)
   const driveFolderId = await createProjectDriveFolder(input.ownerUserId, input.title)
   const project = await createProject({
     ownerUserId: input.ownerUserId,
@@ -774,51 +774,51 @@ export async function importProjectZip(input: {
     driveFolderId,
   })
 
-  const folderIds = new Map<string, string>()
-  folderIds.set('', driveFolderId)
-  const createdFiles: ProjectFile[] = []
-  const contentByFileId = new Map<string, string>()
+  try {
+    const folderIds = new Map<string, string>()
+    folderIds.set('', driveFolderId)
+    const createdFiles: ProjectFile[] = []
+    const contentByFileId = new Map<string, string>()
 
-  const fileEntries = entries
-    .filter((entry) => !entry.dir)
-    .sort((left, right) => left.name.localeCompare(right.name))
+    for (const entry of entries) {
+      if (entry.isDirectory) {
+        await ensureProjectFolderPath(input.ownerUserId, project.id, driveFolderId, folderIds, entry.path)
+        continue
+      }
 
-  const topLevelPrefix = detectZipTopLevelPrefix(fileEntries.map((e) => e.name))
+      const name = path.posix.basename(entry.path)
+      const parentPath = parentDirectoryPath(entry.path)
+      const parentDriveId = await ensureProjectFolderPath(input.ownerUserId, project.id, driveFolderId, folderIds, parentPath)
 
-  for (const entry of fileEntries) {
-    const strippedName = topLevelPrefix ? entry.name.slice(topLevelPrefix.length) : entry.name
-    const normalizedPath = normalizeZipPath(strippedName)
-    if (!normalizedPath || entry.dir) {
-      continue
+      const content = await entry.read()
+      const mimeType = inferProjectFileMimeType(entry.path)
+      const textContent = mimeType.startsWith('text/') ? decodeProjectText(content) : null
+      const driveFileId = textContent !== null
+        ? await createTextFileInDrive(input.ownerUserId, parentDriveId, name, textContent)
+        : await createBinaryFileInDrive({ userId: input.ownerUserId, parentId: parentDriveId, name, mimeType, content })
+
+      const createdFile = await createProjectFile({
+        projectId: project.id,
+        name,
+        path: entry.path,
+        mimeType,
+        driveFileId,
+      })
+      createdFiles.push(createdFile)
+      if (textContent !== null) {
+        contentByFileId.set(createdFile.id, textContent)
+      }
     }
 
-    const name = path.posix.basename(normalizedPath)
-    const parentPath = parentDirectoryPath(normalizedPath)
-    const parentDriveId = await ensureProjectFolderPath(input.ownerUserId, project.id, driveFolderId, folderIds, parentPath)
-
-    const content = await entry.async('nodebuffer')
-    const mimeType = inferProjectFileMimeType(normalizedPath)
-    const textContent = mimeType.startsWith('text/') ? content.toString('utf8') : null
-    const driveFileId = mimeType.startsWith('text/')
-      ? await createTextFileInDrive(input.ownerUserId, parentDriveId, name, textContent ?? '')
-      : await createBinaryFileInDrive({ userId: input.ownerUserId, parentId: parentDriveId, name, mimeType, content })
-
-    const createdFile = await createProjectFile({
-      projectId: project.id,
-      name,
-      path: normalizedPath,
-      mimeType,
-      driveFileId,
-    })
-    createdFiles.push(createdFile)
-    if (textContent !== null) {
-      contentByFileId.set(createdFile.id, textContent)
-    }
+    const mainFile = chooseAutomaticMainFile(createdFiles, contentByFileId)
+    await setProjectMainFile(project.id, mainFile?.id ?? null)
+  } catch (error) {
+    // Do not leave a half-imported project behind.
+    await deleteDriveItem(input.ownerUserId, driveFolderId).catch(() => {})
+    await deleteProject(project.id).catch(() => {})
+    throw error
   }
 
-  const mainFile = chooseAutomaticMainFile(createdFiles, contentByFileId)
-
-  await setProjectMainFile(project.id, mainFile?.id ?? null)
   return (await getProjectById(project.id)) ?? project
 }
 
@@ -1430,6 +1430,35 @@ async function applySuggestionToFile(suggestion: ProjectReviewSuggestionRow) {
   await touchProjectFile(storage.file.id)
 }
 
+/**
+ * Replace a text file's content. Open editors get the change through the live
+ * collaboration document (which then persists itself); otherwise the stored
+ * file and its collaboration state are updated together, so the old state
+ * cannot later overwrite the new content.
+ */
+export async function replaceProjectFileText(fileId: string, content: string): Promise<void> {
+  const liveDocument = hocuspocusServer.documents.get(fileId)
+  if (liveDocument) {
+    const text = liveDocument.getText('content')
+    if (text.toString() !== content) {
+      liveDocument.transact(() => {
+        text.delete(0, text.length)
+        text.insert(0, content)
+      }, 'upload')
+    }
+  }
+
+  const storage = await getProjectFileStorage(fileId)
+  if (!storage) {
+    throw new Error('File storage not found')
+  }
+  await writeTextFileToDrive(storage.ownerUserId, storage.file.driveFileId, content)
+  if (!liveDocument) {
+    await updateProjectFileCollaborationState(fileId, applySourceToCollaborationState(storage.collaborationState, content))
+  }
+  await touchProjectFile(fileId)
+}
+
 async function upsertProjectPreferences(projectId: string, patch: Partial<ProjectState>) {
   const current = await getProjectState(projectId)
   const now = Date.now()
@@ -1640,23 +1669,6 @@ function parentDirectoryPath(filePath: string): string | null {
 
 function joinProjectPath(parentPath: string | null, name: string): string {
   return parentPath ? `${parentPath}/${name}` : name
-}
-
-function detectZipTopLevelPrefix(names: string[]): string | null {
-  if (names.length === 0) return null
-  const firstSegment = (name: string) => name.split('/')[0] + '/'
-  const first = firstSegment(names[0])
-  if (!names.every((n) => n.startsWith(first))) return null
-  return first
-}
-
-function normalizeZipPath(input: string): string | null {
-  const normalized = path.posix.normalize(input).replace(/^\/+/, '')
-  if (!normalized || normalized === '.' || normalized.startsWith('..') || normalized.includes('../')) {
-    return null
-  }
-
-  return normalized
 }
 
 function sortFilesByPath(left: string, right: string): number {

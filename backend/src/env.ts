@@ -80,6 +80,8 @@ export const env = {
   compileHttpConcurrencyMax: getNumberEnv('COMPILE_HTTP_CONCURRENCY_MAX', isProduction ? 96 : 192),
   exportHttpConcurrencyMax: getNumberEnv('EXPORT_HTTP_CONCURRENCY_MAX', isProduction ? 48 : 96),
   requestBodyLimitMb: getNumberEnv('REQUEST_BODY_LIMIT_MB', 64),
+  uploadLimitMb: getNumberEnv('UPLOAD_LIMIT_MB', 64),
+  zipImportLimitMb: getNumberEnv('ZIP_IMPORT_LIMIT_MB', 256),
 
   compileTmpdir: process.env.COMPILE_TMPDIR ?? '',
   compilePdfOnSave: getBooleanEnv('COMPILE_PDF_ON_SAVE', false),

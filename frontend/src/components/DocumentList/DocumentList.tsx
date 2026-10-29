@@ -668,8 +668,8 @@ export default function DocumentList() {
       const res = await apiClient.post<ProjectSummary>('/api/projects/import-zip', formData)
       const project = res.data
       navigate(`/projects/${project.id}`)
-    } catch (error) {
-      alert('Failed to import ZIP file.')
+    } catch (error: any) {
+      alert(error?.response?.data?.error ?? 'Failed to import ZIP file.')
     } finally {
       setLoading(false)
     }
