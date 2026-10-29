@@ -126,6 +126,10 @@ import _EyeOff from 'lucide-react/dist/esm/icons/eye-off.mjs'
 import _Focus from 'lucide-react/dist/esm/icons/focus.mjs'
 // @ts-ignore
 import _Minimize2 from 'lucide-react/dist/esm/icons/minimize-2.mjs'
+// @ts-ignore
+import _Maximize from 'lucide-react/dist/esm/icons/maximize.mjs'
+// @ts-ignore
+import _Minimize from 'lucide-react/dist/esm/icons/minimize.mjs'
 
 export const Home: LucideIcon = _Home
 export const Plus: LucideIcon = _Plus
@@ -183,6 +187,8 @@ export const Eye: LucideIcon = _Eye
 export const EyeOff: LucideIcon = _EyeOff
 export const Focus: LucideIcon = _Focus
 export const Minimize2: LucideIcon = _Minimize2
+export const Maximize: LucideIcon = _Maximize
+export const Minimize: LucideIcon = _Minimize
 // @ts-ignore
 import _Brain from 'lucide-react/dist/esm/icons/brain.mjs'
 // @ts-ignore

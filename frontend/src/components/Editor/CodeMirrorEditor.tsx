@@ -89,6 +89,7 @@ type ShortcutAction =
   | 'nextSection'
   | 'toggleFold'
   | 'togglePreview'
+  | 'toggleFullscreen'
   | 'focusEditor'
   | 'insertCite'
 
@@ -498,6 +499,33 @@ export default function CodeMirrorEditor({
           ]
         : []
 
+    const shortcutCommands: Record<ShortcutAction, Command> = {
+      compile: () => { onCompileRef.current?.(); return true },
+      save: () => { onSaveRef.current?.(); return true },
+      search: () => { onOpenSearchRef.current?.(); return true },
+      projectSearch: () => { onOpenProjectSearchRef.current?.(); return true },
+      toggleNavigation: () => { onToggleNavigationRef.current?.(); return true },
+      quickExport: () => { onQuickExportRef.current?.(); return true },
+      insertCite: (view) => {
+        const range = view.state.selection.main
+        const selectedText = range.from !== range.to
+          ? view.state.sliceDoc(range.from, range.to).trim()
+          : ''
+        const coords = view.coordsAtPos(range.head)
+        const anchorRect = coords ? new DOMRect(coords.left, coords.top, 0, coords.bottom - coords.top) : null
+        citeShortcutModeRef.current = true
+        onCiteSearchRef.current?.(selectedText, anchorRect, true)
+        return true
+      },
+      previousSection: jumpToPreviousSection,
+      nextSection: jumpToNextSection,
+      toggleFold: (view) => toggleFold(view),
+      togglePreview: () => { onTogglePreviewRef.current?.(); return true },
+      focusEditor: () => { onFocusEditorRef.current?.(); return true },
+      // Handled by the page so it also works outside the editor.
+      toggleFullscreen: () => false,
+    }
+
     const state = EditorState.create({
       doc: ytext.toString(),
       extensions: [
@@ -511,7 +539,14 @@ export default function CodeMirrorEditor({
         EditorView.editable.of(!readOnly),
         suggestionField,
         suggestionViewPlugin,
+        // The user's shortcuts come before CodeMirror's defaults, which
+        // otherwise took Alt-ArrowUp/Down (move line), Mod-g (find next) and
+        // Mod-Enter. Shortcuts on Escape stay last so Escape still closes
+        // completions and the search panel first.
         keymap.of([
+          ...buildShortcutKeyBindings(shortcutBindings, 'leading', shortcutCommands),
+          // Ctrl/Cmd+Enter always renders, whatever the render binding is.
+          { key: 'Mod-Enter', run: () => { onCompileRef.current?.(); return true } },
           ...defaultKeymap,
           ...historyKeymap,
           ...completionKeymap,
@@ -548,30 +583,7 @@ export default function CodeMirrorEditor({
               return false
             }
           },
-          ...buildShortcutKeyBindings(shortcutBindings, {
-            compile: () => { onCompileRef.current?.(); return true },
-            save: () => { onSaveRef.current?.(); return true },
-            search: () => { onOpenSearchRef.current?.(); return true },
-            projectSearch: () => { onOpenProjectSearchRef.current?.(); return true },
-            toggleNavigation: () => { onToggleNavigationRef.current?.(); return true },
-            quickExport: () => { onQuickExportRef.current?.(); return true },
-            insertCite: (view) => {
-              const range = view.state.selection.main
-              const selectedText = range.from !== range.to
-                ? view.state.sliceDoc(range.from, range.to).trim()
-                : ''
-              const coords = view.coordsAtPos(range.head)
-              const anchorRect = coords ? new DOMRect(coords.left, coords.top, 0, coords.bottom - coords.top) : null
-              citeShortcutModeRef.current = true
-              onCiteSearchRef.current?.(selectedText, anchorRect, true)
-              return true
-            },
-            previousSection: jumpToPreviousSection,
-            nextSection: jumpToNextSection,
-            toggleFold: (view) => toggleFold(view),
-            togglePreview: () => { onTogglePreviewRef.current?.(); return true },
-            focusEditor: () => { onFocusEditorRef.current?.(); return true },
-          }),
+          ...buildShortcutKeyBindings(shortcutBindings, 'trailing', shortcutCommands),
         ]),
         editorThemeCompartmentRef.current.of(buildEditorViewTheme(editorMode, fontFamily, fontSize)),
         EditorView.lineWrapping,
@@ -879,7 +891,11 @@ export default function CodeMirrorEditor({
         ref={containerRef}
         style={{ height: '100%', overflow: 'hidden' }}
         onKeyDown={(e) => {
-          if ((e.ctrlKey || e.metaKey) && ['s', 'enter', 'g', 'p', 'f', 'b', 'o', 'e'].includes(e.key.toLowerCase())) {
+          // Plain typing stays inside the editor; key combinations and
+          // function keys reach the page's shortcuts (a fixed list of Ctrl+
+          // letters let only those through, so F11, Alt+letter sidebar keys
+          // and re-bound shortcuts did nothing while typing).
+          if (e.ctrlKey || e.metaKey || e.altKey || /^F\d{1,2}$/.test(e.key)) {
             return
           }
           e.stopPropagation()
@@ -2624,6 +2640,7 @@ function collectHeadingLines(state: EditorState): number[] {
 
 function buildShortcutKeyBindings(
   bindings: ShortcutBindings | undefined,
+  placement: 'leading' | 'trailing',
   commands: Record<ShortcutAction, Command>,
 ) {
   if (!bindings) {
@@ -2632,6 +2649,9 @@ function buildShortcutKeyBindings(
 
   return (Object.entries(bindings) as Array<[ShortcutAction, string]>)
     .filter(([, key]) => Boolean(key.trim()))
+    // Full screen is handled by the page, so it also works outside the editor.
+    .filter(([action]) => action !== 'toggleFullscreen')
+    .filter(([, key]) => (key.trim().toLowerCase() === 'escape') === (placement === 'trailing'))
     .map(([action, key]) => ({
       key,
       run: commands[action],

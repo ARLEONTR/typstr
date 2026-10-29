@@ -79,26 +79,31 @@ type ShortcutAction =
   | 'toggleFold'
   | 'togglePreview'
   | 'focusEditor'
+  | 'insertCite'
+  | 'toggleFullscreen'
 
 type ShortcutBindings = Record<ShortcutAction, string>
 
 const SHORTCUTS_STORAGE_PREFIX = 'typstr.shortcuts.'
+// Must match the editor's defaults (EditorPage); both use the same stored bindings.
 const DEFAULT_SHORTCUT_BINDINGS: ShortcutBindings = {
-  compile: 'Mod-Enter',
+  compile: 'Mod-b',
   save: 'Mod-s',
   search: 'Mod-f',
   projectSearch: 'Mod-Shift-f',
-  toggleNavigation: 'Mod-/',
+  toggleNavigation: 'Mod-g',
   quickExport: 'Mod-Shift-e',
   previousSection: 'Alt-ArrowUp',
   nextSection: 'Alt-ArrowDown',
   toggleFold: 'Mod-Alt-[',
   togglePreview: 'Mod-Shift-p',
   focusEditor: 'Escape',
+  insertCite: 'Mod-e',
+  toggleFullscreen: 'F11',
 }
 
 const SHORTCUT_BINDING_LABELS: Array<{ action: ShortcutAction; label: string; description: string }> = [
-  { action: 'compile', label: 'Render document', description: 'Run a document render for the current entry file.' },
+  { action: 'compile', label: 'Render document', description: 'Run a document render for the current entry file. Ctrl/Cmd+Enter always renders too.' },
   { action: 'save', label: 'Save to Drive', description: 'Persist the active file to Google Drive.' },
   { action: 'search', label: 'Current-file search', description: 'Open in-file search panel.' },
   { action: 'projectSearch', label: 'Project search', description: 'Open project-wide text search panel.' },
@@ -109,6 +114,8 @@ const SHORTCUT_BINDING_LABELS: Array<{ action: ShortcutAction; label: string; de
   { action: 'toggleFold', label: 'Toggle fold', description: 'Fold or unfold current heading section.' },
   { action: 'togglePreview', label: 'Toggle preview', description: 'Show or hide the preview panel.' },
   { action: 'focusEditor', label: 'Focus / Zen mode', description: 'Collapse sidebar and preview to maximise the editor.' },
+  { action: 'insertCite', label: 'Insert citation', description: 'Search the bibliography and insert a citation at the cursor.' },
+  { action: 'toggleFullscreen', label: 'Full screen', description: 'Show the editor on the whole screen, or leave full screen.' },
 ]
 
 type SettingsTabId = 'general' | 'profile' | 'subscription' | 'shortcuts' | 'permissions'

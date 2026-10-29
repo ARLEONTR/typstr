@@ -110,7 +110,7 @@ export default function SvgPreview({
 
     const localIdx = clamped - pageOffset
     const pageElement = pageRefsRef.current[localIdx]
-    pageElement?.scrollIntoView({ behavior, block: 'center' })
+    pageElement?.scrollIntoView({ behavior, block: 'center', inline: 'nearest' })
   }, [pageOffset, pages.length, totalPageCount])
 
   useEffect(() => {
@@ -256,7 +256,14 @@ export default function SvgPreview({
       }
       return
     }
-    ;(target.closest('foreignObject') ?? target).scrollIntoView({ behavior: 'smooth', block: 'center' })
+    // Scroll vertically only: the text layer is much wider than the line it
+    // covers, and scrollIntoView also scrolled the preview sideways.
+    const viewport = pageViewportRef.current
+    const box = (target.closest('foreignObject') ?? target).getBoundingClientRect()
+    if (viewport) {
+      const viewportRect = viewport.getBoundingClientRect()
+      viewport.scrollTo({ top: viewport.scrollTop + box.top - viewportRect.top - viewportRect.height / 2 + box.height / 2, behavior: 'smooth' })
+    }
     target.classList.add(styles.syncFlash)
     window.setTimeout(() => target.classList.remove(styles.syncFlash), 1600)
     setHighlight(null)

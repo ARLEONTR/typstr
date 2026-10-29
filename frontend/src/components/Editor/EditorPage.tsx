@@ -129,6 +129,7 @@ type ShortcutAction =
   | 'nextSection'
   | 'toggleFold'
   | 'togglePreview'
+  | 'toggleFullscreen'
   | 'focusEditor'
   | 'insertCite'
 
@@ -400,6 +401,7 @@ const DEFAULT_SHORTCUT_BINDINGS: ShortcutBindings = {
   toggleFold: 'Mod-Alt-[',
   togglePreview: 'Mod-Shift-p',
   focusEditor: 'Escape',
+  toggleFullscreen: 'F11',
 }
 
 export default function EditorPage() {
@@ -2777,33 +2779,6 @@ function ProjectWorkspace({
       return
     }
 
-    const matchesShortcut = (event: KeyboardEvent, binding: string) => {
-      const parts = binding.toLowerCase().split('-').filter(Boolean)
-      if (parts.length === 0) {
-        return false
-      }
-
-      const keyToken = parts[parts.length - 1]
-      const modifierTokens = new Set(parts.slice(0, -1))
-      const wantsMod = modifierTokens.has('mod')
-      const wantsCtrl = wantsMod || modifierTokens.has('ctrl')
-      const wantsMeta = wantsMod || modifierTokens.has('meta') || modifierTokens.has('cmd')
-      const wantsShift = modifierTokens.has('shift')
-      const wantsAlt = modifierTokens.has('alt') || modifierTokens.has('option')
-
-      const ctrlOrMetaPressed = event.ctrlKey || event.metaKey
-      const modSatisfied = wantsMod ? ctrlOrMetaPressed : true
-
-      if (!modSatisfied) return false
-      if (!wantsMod && wantsCtrl !== event.ctrlKey) return false
-      if (!wantsMod && wantsMeta !== event.metaKey) return false
-      if (event.shiftKey !== wantsShift) return false
-      if (event.altKey !== wantsAlt) return false
-
-      const normalizedEventKey = event.key.length === 1 ? event.key.toLowerCase() : event.key.toLowerCase()
-      return normalizedEventKey === keyToken
-    }
-
     const onCompileShortcut = (event: KeyboardEvent) => {
       const target = event.target as HTMLElement | null
       const tagName = target?.tagName?.toLowerCase()
@@ -2816,7 +2791,7 @@ function ProjectWorkspace({
         return
       }
 
-      if (!matchesShortcut(event, compileShortcut)) {
+      if (!matchesShortcut(event, compileShortcut) && !matchesShortcut(event, 'Mod-Enter')) {
         return
       }
 
@@ -2828,8 +2803,16 @@ function ProjectWorkspace({
     return () => window.removeEventListener('keydown', onCompileShortcut)
   }, [handleCompileNow, shortcutBindings.compile])
 
+  // Export the compiled document: with a sub-document open that is the main
+  // file (with the open file's current text), not the sub-document alone.
+  const exportSourceAndContext = useCallback(() => {
+    const activeText = isEditableTextFile(activeFile) ? ytext.toString() : ''
+    const source = compileTargetFile.id === activeFile.id && !canRenderLatex ? activeText : compileTargetSource
+    return { source, context: compileTargetFile.id === activeFile.id ? compileContext : compileContextWithActiveSource(activeText) }
+  }, [activeFile, canRenderLatex, compileContext, compileContextWithActiveSource, compileTargetFile.id, compileTargetSource, ytext])
+
   const handleDownloadExport = useCallback((format: ExportFormat) => {
-    const source = canRenderLatex ? compileTargetSource : ytext.toString()
+    const { source, context } = exportSourceAndContext()
     if (!source.trim()) {
       appendConversionLog('error', 'Nothing to export from the current file.')
       return
@@ -2839,23 +2822,23 @@ function ProjectWorkspace({
       source,
       format,
       `${project.title}-${compileTargetFile.name.replace(/\.[^.]+$/, '')}`,
-      compileContext,
+      context,
     )
-  }, [appendConversionLog, canRenderLatex, compileContext, compileTargetFile.name, compileTargetSource, exportDocument, project.title, ytext])
+  }, [appendConversionLog, compileTargetFile.name, exportDocument, exportSourceAndContext, project.title])
 
   const handleSaveExportToDrive = useCallback(async (format: ExportFormat) => {
     try {
-      const source = canRenderLatex ? compileTargetSource : ytext.toString()
+      const { source, context } = exportSourceAndContext()
       if (!source.trim()) {
         appendConversionLog('error', 'Nothing to export from the current file.')
         return
       }
 
-      await saveExportToDrive(source, format, compileContext)
+      await saveExportToDrive(source, format, context)
     } catch (error: any) {
       appendConversionLog('error', error?.response?.data?.error ?? 'Failed to save export to Google Drive.')
     }
-  }, [appendConversionLog, canRenderLatex, compileContext, compileTargetSource, saveExportToDrive, ytext])
+  }, [appendConversionLog, exportSourceAndContext, saveExportToDrive])
 
   const handleQuickExport = useCallback(() => {
     const format = project.compileSettings.defaultExportFormat
@@ -5106,17 +5089,42 @@ function ProjectWorkspace({
     )
   }, [goToColumnValue, goToLineValue, revealEditorLocation])
 
+  // Outside the editor (the editor's own keymap handles it there; it marks
+  // the event handled, so it is not run twice).
   useEffect(() => {
     const onGoToShortcut = (event: KeyboardEvent) => {
-      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'g') {
-        event.preventDefault()
-        toggleNavigationPanel()
-      }
+      if (event.defaultPrevented || !matchesShortcut(event, shortcutBindings.toggleNavigation)) return
+      event.preventDefault()
+      toggleNavigationPanel()
     }
 
     window.addEventListener('keydown', onGoToShortcut)
     return () => window.removeEventListener('keydown', onGoToShortcut)
-  }, [toggleNavigationPanel])
+  }, [shortcutBindings.toggleNavigation, toggleNavigationPanel])
+
+  // Full screen: the whole page, from the toolbar button or the shortcut.
+  const [isFullscreen, setIsFullscreen] = useState(() => typeof document !== 'undefined' && Boolean(document.fullscreenElement))
+  useEffect(() => {
+    const onChange = () => setIsFullscreen(Boolean(document.fullscreenElement))
+    document.addEventListener('fullscreenchange', onChange)
+    return () => document.removeEventListener('fullscreenchange', onChange)
+  }, [])
+  const toggleFullscreen = useCallback(() => {
+    if (document.fullscreenElement) {
+      void document.exitFullscreen().catch(() => undefined)
+    } else {
+      void document.documentElement.requestFullscreen?.().catch(() => undefined)
+    }
+  }, [])
+  useEffect(() => {
+    const onFullscreenShortcut = (event: KeyboardEvent) => {
+      if (!matchesShortcut(event, shortcutBindings.toggleFullscreen)) return
+      event.preventDefault()
+      toggleFullscreen()
+    }
+    window.addEventListener('keydown', onFullscreenShortcut)
+    return () => window.removeEventListener('keydown', onFullscreenShortcut)
+  }, [shortcutBindings.toggleFullscreen, toggleFullscreen])
 
   useEffect(() => {
     const SIDEBAR_SHORTCUTS: Record<string, SidebarTabKey> = {
@@ -6778,6 +6786,10 @@ function ProjectWorkspace({
         latexCompiler={canRenderLatex ? activeLatexCompiler : null}
         latexCompilerOptions={canRenderLatex ? ENABLED_LATEX_COMPILER_OPTIONS : []}
         onLatexCompilerChange={canRenderLatex ? handleLatexCompilerChange : undefined}
+        compileShortcutLabel={formatShortcut(shortcutBindings.compile)}
+        isFullscreen={isFullscreen}
+        onToggleFullscreen={toggleFullscreen}
+        fullscreenShortcutLabel={formatShortcut(shortcutBindings.toggleFullscreen)}
       />
 
       {mutationNotice ? (
@@ -12404,7 +12416,44 @@ function normalizeShortcutBindings(input: Partial<ShortcutBindings>): ShortcutBi
     togglePreview: normalizeShortcutBindingValue(input.togglePreview, DEFAULT_SHORTCUT_BINDINGS.togglePreview),
     focusEditor: normalizeShortcutBindingValue(input.focusEditor, DEFAULT_SHORTCUT_BINDINGS.focusEditor),
     insertCite: normalizeShortcutBindingValue(input.insertCite, DEFAULT_SHORTCUT_BINDINGS.insertCite),
+    toggleFullscreen: normalizeShortcutBindingValue(input.toggleFullscreen, DEFAULT_SHORTCUT_BINDINGS.toggleFullscreen),
   }
+}
+
+/** Whether a keydown matches a binding such as "Mod-Shift-p" or "F11". */
+function matchesShortcut(event: KeyboardEvent, binding: string): boolean {
+  const parts = binding.toLowerCase().split('-').filter(Boolean)
+  if (parts.length === 0) {
+    return false
+  }
+
+  const keyToken = parts[parts.length - 1]
+  const modifierTokens = new Set(parts.slice(0, -1))
+  const wantsMod = modifierTokens.has('mod')
+  const wantsCtrl = wantsMod || modifierTokens.has('ctrl')
+  const wantsMeta = wantsMod || modifierTokens.has('meta') || modifierTokens.has('cmd')
+  const wantsShift = modifierTokens.has('shift')
+  const wantsAlt = modifierTokens.has('alt') || modifierTokens.has('option')
+
+  const ctrlOrMetaPressed = event.ctrlKey || event.metaKey
+  if (wantsMod ? !ctrlOrMetaPressed : (wantsCtrl !== event.ctrlKey || wantsMeta !== event.metaKey)) return false
+  if (event.shiftKey !== wantsShift) return false
+  if (event.altKey !== wantsAlt) return false
+
+  return event.key.toLowerCase() === keyToken
+}
+
+/** "Mod-Shift-p" -> "Ctrl+Shift+P" (or "⌘+Shift+P" on macOS). */
+function formatShortcut(binding: string): string {
+  const isMac = typeof navigator !== 'undefined' && /mac/i.test(navigator.platform)
+  return binding.split('-').filter(Boolean).map((part) => {
+    const lower = part.toLowerCase()
+    if (lower === 'mod') return isMac ? '⌘' : 'Ctrl'
+    if (lower === 'alt' || lower === 'option') return isMac ? '⌥' : 'Alt'
+    if (lower === 'shift') return 'Shift'
+    if (lower === 'ctrl') return 'Ctrl'
+    return part.length === 1 ? part.toUpperCase() : part
+  }).join('+')
 }
 
 function normalizeShortcutBindingValue(value: string | undefined, fallback: string): string {

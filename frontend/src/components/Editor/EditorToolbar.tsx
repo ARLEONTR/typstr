@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Share2, Loader2, Play, Settings, Globe, FileText } from '../../icons'
+import { Share2, Loader2, Play, Settings, Globe, FileText, Maximize, Minimize } from '../../icons'
 import CollaboratorAvatars from './CollaboratorAvatars'
 import { useGeminiContext } from '../../context/GeminiContext'
 import type { Awareness } from 'y-protocols/awareness'
@@ -44,6 +44,10 @@ interface Props {
   latexCompiler?: string | null
   latexCompilerOptions?: LatexCompilerOption[]
   onLatexCompilerChange?: (compiler: string) => void
+  compileShortcutLabel?: string
+  isFullscreen?: boolean
+  onToggleFullscreen?: () => void
+  fullscreenShortcutLabel?: string
 }
 
 export default function EditorToolbar({
@@ -71,6 +75,10 @@ export default function EditorToolbar({
   latexCompiler = null,
   latexCompilerOptions = [],
   onLatexCompilerChange,
+  compileShortcutLabel = 'Ctrl+B',
+  isFullscreen = false,
+  onToggleFullscreen,
+  fullscreenShortcutLabel = 'F11',
 }: Props) {
   const navigate = useNavigate()
   const { isCoAuthorEnabled } = useGeminiContext()
@@ -238,7 +246,7 @@ export default function EditorToolbar({
           className={styles.compileBtn}
           onClick={onCompile}
           disabled={isCompiling || !canRender}
-          title={isCompiling ? 'Rendering…' : 'Render (Ctrl+Enter)'}
+          title={isCompiling ? 'Rendering…' : `Render (${compileShortcutLabel} or Ctrl+Enter)`}
           aria-label="Render"
         >
           {isCompiling ? (
@@ -247,6 +255,18 @@ export default function EditorToolbar({
             <Play size={18} fill="currentColor" strokeWidth={0} aria-hidden />
           )}
         </button>
+
+        {onToggleFullscreen ? (
+          <button
+            className={styles.settingsBtn}
+            onClick={onToggleFullscreen}
+            title={`${isFullscreen ? 'Exit full screen' : 'Full screen'} (${fullscreenShortcutLabel})`}
+            aria-label={isFullscreen ? 'Exit full screen' : 'Full screen'}
+            aria-pressed={isFullscreen}
+          >
+            {isFullscreen ? <Minimize size={18} aria-hidden /> : <Maximize size={18} aria-hidden />}
+          </button>
+        ) : null}
 
         {onOpenSettings ? (
           <button
