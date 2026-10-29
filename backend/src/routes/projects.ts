@@ -1372,6 +1372,8 @@ function isSearchableMimeType(mimeType: string, filePath: string): boolean {
   return isProjectTextFilePath(filePath)
 }
 
+const INLINE_SAFE_MIME_TYPE = /^(?:text\/plain|application\/pdf|image\/(?:png|jpeg|gif|webp|avif|bmp)|font\/[\w.+-]+)(?:;|$)/i
+
 function normalizeUploadedProjectFileMimeType(fileName: string, reportedMimeType?: string | null): string {
   const inferredMimeType = inferProjectFileMimeType(fileName)
   if (!reportedMimeType || reportedMimeType === 'application/octet-stream') {
@@ -2085,10 +2087,17 @@ projectsRouter.get('/:projectId/files/:fileId/content', async (req, res, next) =
     }
 
     const content = await readFileBufferFromDrive(file.ownerUserId, file.driveFileId)
+    // Uploaded files are served from the app's own origin. Only passive types
+    // render inline (an uploaded HTML or SVG page could otherwise run script
+    // with the viewer's session), and the sandbox CSP covers anything else.
+    const mimeType = file.mimeType || 'application/octet-stream'
+    const isInlineSafe = INLINE_SAFE_MIME_TYPE.test(mimeType)
+    const inline = req.query.download !== '1' && isInlineSafe
     res.setHeader('ETag', etag)
     res.setHeader('Cache-Control', 'private, max-age=60, must-revalidate')
-    res.setHeader('Content-Type', file.mimeType || 'application/octet-stream')
-    res.setHeader('Content-Disposition', `${req.query.download === '1' ? 'attachment' : 'inline'}; filename="${encodeURIComponent(file.name)}"`)
+    res.setHeader('Content-Type', isInlineSafe ? mimeType : 'application/octet-stream')
+    res.setHeader('Content-Security-Policy', "default-src 'none'; img-src 'self' data:; style-src 'unsafe-inline'; sandbox")
+    res.setHeader('Content-Disposition', `${inline ? 'inline' : 'attachment'}; filename*=UTF-8''${encodeURIComponent(file.name)}`)
     res.send(content)
   } catch (error) {
     next(error)
