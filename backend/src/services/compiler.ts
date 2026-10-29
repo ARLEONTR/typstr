@@ -186,18 +186,49 @@ function getLatexCompileCacheKey(input: {
   return hash.digest('hex')
 }
 
-function detectLatexEngine(files: CompileWorkspaceFile[], entryPath: string): LatexEngine {
+const UNICODE_ENGINE_PACKAGES = /\\(?:usepackage|RequirePackage)(\[[^\]]*\])?\{[^}]*\b(fontspec|polyglossia|unicode-math)\b[^}]*\}/
+const LUA_ENGINE_PACKAGES = /\\(?:usepackage|RequirePackage)(\[[^\]]*\])?\{[^}]*\b(luacode|luatexbase|luaotfload)\b[^}]*\}/
+const TEX_PROGRAM_COMMENT = /^%\s*!\s*TeX\s+(?:TS-)?program\s*=\s*(pdflatex|xelatex|lualatex|latex)\b/im
+
+export function detectLatexEngine(files: CompileWorkspaceFile[], entryPath: string): LatexEngine {
   const normalizedEntryPath = normalizeDependencyPath(entryPath)
-  const entryFile = files.find((file) => normalizeDependencyPath(file.path) === normalizedEntryPath)
-  if (entryFile && typeof entryFile.content === 'string') {
-    if (/\\usepackage(\[[^\]]*\])?\{(fontspec|polyglossia|unicode-math)\}/i.test(entryFile.content)) {
-      return 'xelatex'
-    }
-    if (/\\usepackage(\[[^\]]*\])?\{luacode\}/i.test(entryFile.content)) {
-      return 'lualatex'
+  const sourceOf = (filePath: string) => {
+    const file = files.find((candidate) => normalizeDependencyPath(candidate.path) === filePath)
+    return file && typeof file.content === 'string' ? file.content : null
+  }
+  const entrySource = sourceOf(normalizedEntryPath)
+  if (entrySource === null) {
+    return 'pdflatex'
+  }
+
+  // An explicit "% !TEX program = xelatex" line wins, as in other editors.
+  const requested = entrySource.match(TEX_PROGRAM_COMMENT)?.[1]?.toLowerCase()
+  if (requested) {
+    return requested === 'latex' ? 'pdflatex' : requested as LatexEngine
+  }
+
+  // Look through the entry file and the project's own classes and packages it
+  // loads (a template class usually loads fontspec, not main.tex).
+  const entryDir = path.posix.dirname(normalizedEntryPath)
+  const pending = [entrySource]
+  const seen = new Set<string>([normalizedEntryPath])
+  let needsUnicodeEngine = false
+  while (pending.length > 0) {
+    const source = pending.pop()!
+    if (LUA_ENGINE_PACKAGES.test(source)) return 'lualatex'
+    if (UNICODE_ENGINE_PACKAGES.test(source)) needsUnicodeEngine = true
+    for (const match of source.matchAll(/\\(documentclass|LoadClass|usepackage|RequirePackage)(?:\[[^\]]*\])?\{([^}]+)\}/g)) {
+      const extension = match[1] === 'documentclass' || match[1] === 'LoadClass' ? '.cls' : '.sty'
+      for (const name of match[2].split(',')) {
+        const candidate = normalizeDependencyPath(path.posix.join(entryDir === '.' ? '' : entryDir, `${name.trim()}${extension}`))
+        if (seen.has(candidate)) continue
+        seen.add(candidate)
+        const local = sourceOf(candidate)
+        if (local !== null) pending.push(local)
+      }
     }
   }
-  return 'pdflatex'
+  return needsUnicodeEngine ? 'xelatex' : 'pdflatex'
 }
 
 export interface CompileTimings {

@@ -166,3 +166,20 @@ test('TeX tools get no backend secrets and paranoid file access', () => {
     else process.env.SESSION_SECRET = previousSecret
   }
 })
+
+test('the LaTeX engine follows the TeX program comment and local classes', async () => {
+  const { detectLatexEngine } = await import('./compiler.js')
+  const file = (filePath: string, content: string) => ({ path: filePath, content })
+  assert.equal(detectLatexEngine([file('main.tex', '\\documentclass{article}')], 'main.tex'), 'pdflatex')
+  assert.equal(detectLatexEngine([file('main.tex', '% !TEX program = lualatex\n\\usepackage{fontspec}')], 'main.tex'), 'lualatex')
+  assert.equal(detectLatexEngine([file('main.tex', '%!TeX TS-program = xelatex\n\\documentclass{article}')], 'main.tex'), 'xelatex')
+  assert.equal(detectLatexEngine([file('main.tex', '\\usepackage[no-math]{fontspec}')], 'main.tex'), 'xelatex')
+  assert.equal(detectLatexEngine([
+    file('main.tex', '\\documentclass[a4paper]{company-report}'),
+    file('company-report.cls', '\\LoadClass{article}\\RequirePackage{xcolor,fontspec}'),
+  ], 'main.tex'), 'xelatex')
+  assert.equal(detectLatexEngine([
+    file('doc/main.tex', '\\documentclass{report}\\usepackage{mystyle}'),
+    file('doc/mystyle.sty', '\\RequirePackage{luacode}'),
+  ], 'doc/main.tex'), 'lualatex')
+})

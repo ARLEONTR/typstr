@@ -814,6 +814,7 @@ function ProjectWorkspace({
         ? latexCompilerByFileId[compileTargetFile.id]
         : DEFAULT_LATEX_COMPILER)
     : null
+  const hasExplicitLatexCompiler = Boolean(latexCompilerByFileId[compileTargetFile.id])
   const activeLatexWebPreviewEngine = canRenderLatex && activeLatexCompiler && LATEX_WEB_PREVIEW_ENGINES.includes(activeLatexCompiler as LatexWebPreviewEngine)
     ? activeLatexCompiler as LatexWebPreviewEngine
     : null
@@ -2190,10 +2191,12 @@ function ProjectWorkspace({
     entryFilePath: compileTargetFile.path,
     documentFormat: canRenderLatex ? 'latex' as const : 'typst' as const,
     format: previewMode,
-    latexEngine: canRenderLatex && activeLatexCompiler && !LATEX_WEB_PREVIEW_ENGINES.includes(activeLatexCompiler as LatexWebPreviewEngine) ? activeLatexCompiler as LatexEngine : undefined,
+    // Without an explicit choice the server picks the engine from the sources
+    // ("% !TEX program", fontspec in main.tex or in the project's own class).
+    latexEngine: canRenderLatex && hasExplicitLatexCompiler && activeLatexCompiler && !LATEX_WEB_PREVIEW_ENGINES.includes(activeLatexCompiler as LatexWebPreviewEngine) ? activeLatexCompiler as LatexEngine : undefined,
     latexWebPreviewEngine: canRenderLatex ? (activeLatexWebPreviewEngine ?? DEFAULT_LATEX_WEB_PREVIEW_ENGINE) : undefined,
     previewSessionId: `${previewSessionIdRef.current}:${previewMode}`,
-  }), [activeLatexCompiler, activeLatexWebPreviewEngine, canRenderLatex, compileTargetFile.id, compileTargetFile.path, previewMode, project.id])
+  }), [activeLatexCompiler, activeLatexWebPreviewEngine, canRenderLatex, compileTargetFile.id, compileTargetFile.path, hasExplicitLatexCompiler, previewMode, project.id])
   const compileContextWithActiveSource = useCallback((activeSourceOverride: string) => ({
     ...compileContext,
     activeFileId: compileTargetFile.id === activeFile.id ? undefined : activeFile.id,
