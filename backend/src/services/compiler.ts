@@ -731,11 +731,18 @@ export async function compileLatexProjectToPdf(input: {
             return
           }
 
-          const continueAfterBib = () => {
+          // Contents, page totals and glossaries can need one more pass after
+          // the second; rerun while LaTeX asks for it, at most twice.
+          const continueAfterBib = (extraPasses = 2) => {
             runLatexWithBudget(engine, latexArgs).then((secondPass) => {
               logs.push(`$ ${engine} final pass\n${secondPass.log}`)
               if (secondPass.exitCode !== 0) {
                 errors.push(secondPass.log || `${engine} final pass exited with code ${secondPass.exitCode}`)
+              }
+
+              if (secondPass.exitCode === 0 && extraPasses > 1 && latexLogNeedsRerun(secondPass.log)) {
+                continueAfterBib(extraPasses - 1)
+                return
               }
 
               if (!pathExists(outputFile)) {
