@@ -323,6 +323,14 @@ export interface ProjectInvitation {
   updatedAt: number
 }
 
+export interface ProjectCommentAssignee {
+  userId: string
+  name: string | null
+  email: string
+  avatarUrl: string | null
+  isPrimary: boolean
+}
+
 export interface ProjectComment {
   id: string
   projectId: string
@@ -346,6 +354,8 @@ export interface ProjectComment {
   assigneeUserId: string | null
   assigneeName: string | null
   assigneeEmail: string | null
+  /** Everyone the thread is assigned to; at most one is the main responsible. */
+  assignees: ProjectCommentAssignee[]
   reviewRequestId: string | null
   projectTitle?: string
   filePath?: string
@@ -401,7 +411,7 @@ export interface ProjectNotification {
   commentId: string
   actorUserId: string
   actorName: string
-  type: 'mention'
+  type: 'mention' | 'assignment' | 'reply'
   excerpt: string
   createdAt: number
   readAt: number | null

@@ -60,6 +60,8 @@ import {
   updateProjectTitle,
   assignProjectComment,
   listCommentsAssignedToUser,
+  listAllProjectComments,
+  setProjectCommentAssignees,
   listCommentsInvolvingUser,
   listProjectCommentsInvolvingUser,
   getSearchableFilesForUser,
@@ -2384,6 +2386,87 @@ projectsRouter.post('/:projectId/files/:fileId/restore', async (req, res, next) 
   }
 })
 
+// Every thread of the project, for the review panel.
+projectsRouter.get('/:projectId/comments', async (req, res) => {
+  const user = getAuthenticatedUser(req)
+  if (!(await canAccessProject(req.params.projectId, user.id, 'viewer'))) {
+    return res.status(404).json({ error: 'Project not found' })
+  }
+
+  res.json(await listAllProjectComments(req.params.projectId))
+})
+
+/**
+ * Read `assigneeUserIds` / `primaryAssigneeUserId` (or the older single
+ * `assigneeUserId`) from a request body, keeping project members only.
+ */
+async function parseCommentAssignees(projectId: string, body: Record<string, unknown>): Promise<
+  { ok: true; userIds: string[]; primaryUserId: string | null } | { ok: false; error: string }
+> {
+  let userIds: string[]
+  let primaryUserId: string | null
+  if (Array.isArray(body.assigneeUserIds)) {
+    if (body.assigneeUserIds.length > 50 || !body.assigneeUserIds.every((id) => typeof id === 'string')) {
+      return { ok: false, error: 'assigneeUserIds must be a list of user ids' }
+    }
+    userIds = body.assigneeUserIds as string[]
+    primaryUserId = typeof body.primaryAssigneeUserId === 'string' ? body.primaryAssigneeUserId : null
+  } else {
+    const single = typeof body.assigneeUserId === 'string' && body.assigneeUserId ? body.assigneeUserId : null
+    userIds = single ? [single] : []
+    primaryUserId = single
+  }
+
+  userIds = [...new Set(userIds)]
+  if (primaryUserId && !userIds.includes(primaryUserId)) {
+    return { ok: false, error: 'The main responsible must be one of the assignees' }
+  }
+  if (userIds.length > 0) {
+    const memberIds = new Set((await listProjectMembers(projectId)).map((member) => member.userId))
+    if (userIds.some((id) => !memberIds.has(id))) {
+      return { ok: false, error: 'Comments can only be assigned to project members' }
+    }
+  }
+  return { ok: true, userIds, primaryUserId }
+}
+
+async function notifyCommentAssignees(input: { userIds: string[]; projectId: string; fileId: string; commentId: string; actorUserId: string; excerpt: string }) {
+  await createProjectNotifications({
+    recipientUserIds: input.userIds,
+    projectId: input.projectId,
+    fileId: input.fileId,
+    commentId: input.commentId,
+    actorUserId: input.actorUserId,
+    type: 'assignment',
+    excerpt: input.excerpt.slice(0, 220),
+  })
+}
+
+projectsRouter.put('/:projectId/comments/:commentId/assignees', async (req, res) => {
+  const user = getAuthenticatedUser(req)
+  const role = await getProjectRole(req.params.projectId, user.id)
+  if (!role) return res.status(404).json({ error: 'Project not found' })
+  if (role === 'viewer') return res.status(403).json({ error: 'Editor access required' })
+
+  const comment = await getProjectCommentById(req.params.commentId)
+  if (!comment || comment.projectId !== req.params.projectId) {
+    return res.status(404).json({ error: 'Comment not found' })
+  }
+
+  const parsed = await parseCommentAssignees(comment.projectId, req.body ?? {})
+  if (!parsed.ok) return res.status(400).json({ error: parsed.error })
+
+  const added = await setProjectCommentAssignees({
+    commentId: comment.id,
+    userIds: parsed.userIds,
+    primaryUserId: parsed.primaryUserId,
+    actorUserId: user.id,
+  })
+  await notifyCommentAssignees({ userIds: added, projectId: comment.projectId, fileId: comment.fileId, commentId: comment.id, actorUserId: user.id, excerpt: comment.content })
+
+  res.json(await getProjectCommentById(comment.id))
+})
+
 projectsRouter.get('/:projectId/files/:fileId/comments', async (req, res) => {
   const user = getAuthenticatedUser(req)
   const file = await getProjectFileForUser(req.params.fileId, user.id)
@@ -2532,7 +2615,10 @@ projectsRouter.post('/:projectId/files/:fileId/comments', async (req, res) => {
   const endLine = Number(req.body.endLine)
   const endColumn = Number(req.body.endColumn)
   const pdfAnnotationResult = validateProjectCommentPdfAnnotation(req.body.pdfAnnotation)
-  const assigneeUserId = typeof req.body.assigneeUserId === 'string' ? req.body.assigneeUserId : null
+  const assignees = await parseCommentAssignees(file.projectId, req.body ?? {})
+  if (!assignees.ok) {
+    return res.status(400).json({ error: assignees.error })
+  }
 
   if (!contentResult.valid) {
     return res.status(400).json({ error: contentResult.error })
@@ -2567,8 +2653,11 @@ projectsRouter.post('/:projectId/files/:fileId/comments', async (req, res) => {
     endLine,
     endColumn,
     pdfAnnotation: pdfAnnotationResult.value,
-    assigneeUserId,
   })
+  if (assignees.userIds.length > 0) {
+    await setProjectCommentAssignees({ commentId: comment.id, userIds: assignees.userIds, primaryUserId: assignees.primaryUserId, actorUserId: user.id })
+    await notifyCommentAssignees({ userIds: assignees.userIds, projectId: file.projectId, fileId: file.id, commentId: comment.id, actorUserId: user.id, excerpt: content })
+  }
 
   const mentionedUserIds = resolveMentionedUserIds(content, await listProjectMembers(file.projectId), user.id)
   await createProjectNotifications({
@@ -2581,7 +2670,7 @@ projectsRouter.post('/:projectId/files/:fileId/comments', async (req, res) => {
     excerpt: content.slice(0, 220),
   })
 
-  res.status(201).json(comment)
+  res.status(201).json(assignees.userIds.length > 0 ? await getProjectCommentById(comment.id) : comment)
 })
 
 function validateProjectCommentPdfAnnotation(value: unknown): {
@@ -2733,6 +2822,18 @@ projectsRouter.post('/:projectId/files/:fileId/comments/:commentId/replies', asy
     type: 'mention',
     excerpt: content.slice(0, 220),
   })
+  // The thread's author and assignees hear about replies (mentions already did).
+  const participants = [comment.authorUserId, ...comment.assignees.map((assignee) => assignee.userId)]
+    .filter((id): id is string => Boolean(id) && !mentionedUserIds.includes(id as string))
+  await createProjectNotifications({
+    recipientUserIds: participants,
+    projectId: file.projectId,
+    fileId: file.id,
+    commentId: comment.id,
+    actorUserId: user.id,
+    type: 'reply',
+    excerpt: content.slice(0, 220),
+  })
 
   res.status(201).json(updatedComment)
 })
@@ -2760,6 +2861,11 @@ projectsRouter.patch('/:projectId/files/:fileId/comments/:commentId', async (req
 
   if (!status) {
     return res.status(400).json({ error: 'status must be open, resolved, or deleted' })
+  }
+
+  // "deleted" marks a thread whose text is gone; only its author or an editor may.
+  if (status === 'deleted' && comment.authorUserId !== user.id && !(await canAccessProject(file.projectId, user.id, 'editor'))) {
+    return res.status(403).json({ error: 'Only the comment author or an editor can change this comment' })
   }
 
   const updatedComment = await updateProjectCommentStatus({
@@ -2791,8 +2897,10 @@ projectsRouter.patch('/:projectId/files/:fileId/comments/:commentId/assign', asy
   const role = await getProjectRole(file.projectId, user.id)
   if (!role || role === 'viewer') return res.status(403).json({ error: 'Not authorized' })
 
-  const { assigneeUserId } = req.body as { assigneeUserId?: string | null }
-  await assignProjectComment(comment.id, assigneeUserId ?? null)
+  const parsed = await parseCommentAssignees(file.projectId, { assigneeUserId: req.body?.assigneeUserId ?? null })
+  if (!parsed.ok) return res.status(400).json({ error: parsed.error })
+  const added = await assignProjectComment(comment.id, parsed.primaryUserId, user.id)
+  await notifyCommentAssignees({ userIds: added, projectId: file.projectId, fileId: file.id, commentId: comment.id, actorUserId: user.id, excerpt: comment.content })
 
   const updated = await getProjectCommentById(comment.id)
   res.json(updated)

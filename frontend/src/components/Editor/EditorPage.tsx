@@ -24,6 +24,7 @@ import { TasksPanel } from './TasksPanel'
 import PreviewErrorBoundary from './PreviewErrorBoundary'
 import { convertLatexSnippetToTypst, explainCompileDiagnostic, type EditorSignatureHint } from './editorLearning'
 import { buildPreviewIndex, buildSourceIndex, previewToSource, sourceToPreview, type SourceFile } from '../../typstPreviewSync'
+import CommentThreads, { AssigneeChips, AssigneePicker, type AssigneeSelection } from './CommentThreads'
 import { collectDroppedFiles, runWithConcurrency, type DroppedUpload, type UploadItem } from '../../droppedFiles'
 import { logger } from '../../logger'
 
@@ -644,7 +645,7 @@ function ProjectWorkspace({
   const [projectTasks, setProjectTasks] = useState<ProjectComment[]>([])
   const [isLoadingProjectTasks, setIsLoadingProjectTasks] = useState(false)
   const [commentDraft, setCommentDraft] = useState('')
-  const [commentDraftAssigneeUserId, setCommentDraftAssigneeUserId] = useState<string | null>(null)
+  const [commentDraftAssignees, setCommentDraftAssignees] = useState<AssigneeSelection>({ userIds: [], primaryUserId: null })
   const [replyDrafts, setReplyDrafts] = useState<Record<string, string>>({})
   const [suggestionsByFileId, setSuggestionsByFileId] = useState<Record<string, ProjectReviewSuggestion[]>>({})
   const [isLoadingSuggestions, setIsLoadingSuggestions] = useState(false)
@@ -1447,46 +1448,61 @@ function ProjectWorkspace({
     }
   }, [activeFile, canCollaborateInEditor, project.id, projectSearchIndex, ytext])
 
+  // Comments of the whole project: the review panel lists every file's
+  // threads. Refreshed periodically and when the window regains focus, so
+  // collaborators' threads and assignments show up without a reload.
+  const loadProjectComments = useCallback(async (options?: { quiet?: boolean }) => {
+    if (!options?.quiet) {
+      setIsLoadingComments(true)
+    }
+    try {
+      const response = await apiClient.get<ProjectComment[]>(`/api/projects/${project.id}/comments`)
+      const byFile: Record<string, ProjectComment[]> = {}
+      for (const comment of response.data) {
+        (byFile[comment.fileId] ??= []).push(comment)
+      }
+      for (const fileId of Object.keys(byFile)) {
+        byFile[fileId] = sortComments(byFile[fileId])
+      }
+      setCommentsByFileId(byFile)
+      setCommentsError(null)
+    } catch (error: any) {
+      if (!options?.quiet) {
+        setCommentsError(error?.response?.data?.error ?? 'Failed to load comments.')
+      }
+    } finally {
+      if (!options?.quiet) {
+        setIsLoadingComments(false)
+      }
+    }
+  }, [project.id])
+
+  useEffect(() => {
+    void loadProjectComments()
+    const refresh = () => {
+      if (document.visibilityState === 'visible') void loadProjectComments({ quiet: true })
+    }
+    const timer = window.setInterval(refresh, 30_000)
+    window.addEventListener('focus', refresh)
+    return () => {
+      window.clearInterval(timer)
+      window.removeEventListener('focus', refresh)
+    }
+  }, [loadProjectComments])
+
   useEffect(() => {
     if (!canLoadCommentsForActiveFile) {
-      setCommentsError(null)
       setCommentSelection(null)
       setHighlightedCommentId(null)
-      return
     }
+  }, [canLoadCommentsForActiveFile])
 
-    let cancelled = false
-    setIsLoadingComments(true)
-    setCommentsError(null)
-
-    void apiClient.get<ProjectComment[]>(`/api/projects/${project.id}/files/${activeFile.id}/comments`)
-      .then((response) => {
-        if (cancelled) {
-          return
-        }
-
-        setCommentsByFileId((current) => ({
-          ...current,
-          [activeFile.id]: sortComments(response.data),
-        }))
-      })
-      .catch((error: any) => {
-        if (cancelled) {
-          return
-        }
-
-        setCommentsError(error?.response?.data?.error ?? 'Failed to load comments for this file.')
-      })
-      .finally(() => {
-        if (!cancelled) {
-          setIsLoadingComments(false)
-        }
-      })
-
-    return () => {
-      cancelled = true
-    }
-  }, [activeFile.id, activeFile.mimeType, canLoadCommentsForActiveFile, project.id])
+  const upsertCommentInState = useCallback((comment: ProjectComment) => {
+    setCommentsByFileId((current) => ({
+      ...current,
+      [comment.fileId]: sortComments([...(current[comment.fileId] ?? []).filter((entry) => entry.id !== comment.id), comment]),
+    }))
+  }, [])
 
   useEffect(() => {
     if (!canCreateTextComments) {
@@ -1937,6 +1953,11 @@ function ProjectWorkspace({
   const activeComments = useMemo(
     () => sortComments(commentsByFileId[activeFile.id] ?? []),
     [activeFile.id, commentsByFileId],
+  )
+  const allProjectComments = useMemo(() => Object.values(commentsByFileId).flat(), [commentsByFileId])
+  const filePathsById = useMemo(
+    () => Object.fromEntries(project.files.map((file) => [file.id, file.path])),
+    [project.files],
   )
   const convertedLatexSnippet = useMemo(
     () => latexConverterSource.trim() ? convertLatexSnippetToTypst(latexConverterSource) : '',
@@ -2656,39 +2677,42 @@ function ProjectWorkspace({
     }
   }, [isCompiling, compileError, loadEcosystem])
 
+  // A thread whose quoted text is gone from the file is marked detached
+  // ("deleted"), and reopened when the text comes back (e.g. after undo).
+  // Checked against the open file's live text once it has synced: the
+  // debounced editor text can still hold the previous file's text right
+  // after switching files, which detached the new file's threads.
   useEffect(() => {
-    if (!isEditableTextFile(activeFile) || activeComments.length === 0 || !activeSource) {
+    if (!isEditableTextFile(activeFile) || activeComments.length === 0 || (canCollaborateInEditor && !synced)) {
+      return
+    }
+    const source = ytext.toString()
+    if (!source) {
       return
     }
 
-    const missingComments = activeComments.filter((comment) => {
-      if (comment.status === 'deleted' || comment.pdfAnnotation) {
-        return false
-      }
-
+    const changes: Array<{ comment: ProjectComment; status: 'open' | 'deleted' }> = []
+    for (const comment of activeComments) {
+      if (comment.pdfAnnotation || comment.fileId !== activeFile.id) continue
       const normalizedExcerpt = normalizeCommentExcerpt(comment.excerpt)
-      return normalizedExcerpt ? !sourceContainsCommentExcerpt(activeSource, normalizedExcerpt) : false
-    })
-
-    if (missingComments.length === 0) {
-      return
+      if (!normalizedExcerpt) continue
+      const present = sourceContainsCommentExcerpt(source, normalizedExcerpt)
+      if (comment.status === 'deleted' && present) changes.push({ comment, status: 'open' })
+      else if (comment.status !== 'deleted' && !present) changes.push({ comment, status: 'deleted' })
     }
 
-    for (const comment of missingComments) {
+    for (const { comment, status } of changes) {
       if (pendingDeletedCommentIdsRef.current.has(comment.id)) {
         continue
       }
 
       pendingDeletedCommentIdsRef.current.add(comment.id)
-      void apiClient.patch<ProjectComment>(`/api/projects/${project.id}/files/${activeFile.id}/comments/${comment.id}`, {
-        status: 'deleted',
-      })
+      void apiClient.patch<ProjectComment>(`/api/projects/${project.id}/files/${comment.fileId}/comments/${comment.id}`, { status })
         .then((response) => {
-          setCommentsByFileId((current) => ({
-            ...current,
-            [activeFile.id]: sortComments((current[activeFile.id] ?? []).map((entry) => entry.id === comment.id ? response.data : entry)),
-          }))
-          setHighlightedCommentId((current) => current === comment.id ? null : current)
+          upsertCommentInState(response.data)
+          if (status === 'deleted') {
+            setHighlightedCommentId((current) => current === comment.id ? null : current)
+          }
         })
         .catch(() => {
           return undefined
@@ -2697,7 +2721,7 @@ function ProjectWorkspace({
           pendingDeletedCommentIdsRef.current.delete(comment.id)
         })
     }
-  }, [activeComments, activeFile, activeSource, project.id])
+  }, [activeComments, activeFile, activeSource, canCollaborateInEditor, project.id, synced, upsertCommentInState, ytext])
 
   const projectSearchResults = useMemo(() => {
     const query = projectSearchQuery.trim().toLowerCase()
@@ -4591,21 +4615,19 @@ function ProjectWorkspace({
         startColumn: commentSelection.startColumn,
         endLine: commentSelection.endLine,
         endColumn: commentSelection.endColumn,
-        assigneeUserId: commentDraftAssigneeUserId,
+        assigneeUserIds: commentDraftAssignees.userIds,
+        primaryAssigneeUserId: commentDraftAssignees.primaryUserId,
       })
 
-      setCommentsByFileId((current) => ({
-        ...current,
-        [activeFile.id]: sortComments([...(current[activeFile.id] ?? []), response.data]),
-      }))
+      upsertCommentInState(response.data)
       setCommentDraft('')
-      setCommentDraftAssigneeUserId(null)
+      setCommentDraftAssignees({ userIds: [], primaryUserId: null })
       setHighlightedCommentId(response.data.id)
       revealEditorLocation(response.data.startLine, response.data.startColumn)
     } catch (error: any) {
       alert(error?.response?.data?.error ?? 'Failed to create comment.')
     }
-  }, [activeFile, canCreateTextComments, commentDraft, commentDraftAssigneeUserId, commentSelection, project.id, revealEditorLocation])
+  }, [activeFile, canCreateTextComments, commentDraft, commentDraftAssignees, commentSelection, project.id, revealEditorLocation, upsertCommentInState])
 
   const handleCreatePdfComment = useCallback(async ({
     annotation,
@@ -4642,6 +4664,16 @@ function ProjectWorkspace({
 
   const handleCommentClick = useCallback((comment: ProjectComment) => {
     setHighlightedCommentId(comment.id)
+    if (comment.fileId !== activeFile.id) {
+      // A thread in another file: open that file at the thread.
+      if (comment.pdfAnnotation) {
+        onSelectFile(comment.fileId)
+        setActiveNoteDialogCommentId(comment.id)
+      } else {
+        revealInFile(comment.fileId, comment.startLine, comment.startColumn)
+      }
+      return
+    }
     if (comment.pdfAnnotation) {
       setActiveNoteDialogCommentId(comment.id)
       return
@@ -4650,7 +4682,7 @@ function ProjectWorkspace({
     if (comment.status !== 'deleted') {
       revealEditorLocation(comment.startLine, comment.startColumn)
     }
-  }, [revealEditorLocation])
+  }, [activeFile.id, onSelectFile, revealEditorLocation, revealInFile])
 
   const handleCommentActivateFromEditor = useCallback((commentId: string) => {
     const comment = activeComments.find((entry) => entry.id === commentId)
@@ -4673,58 +4705,49 @@ function ProjectWorkspace({
     setReplyDrafts((current) => ({ ...current, [commentId]: value }))
   }, [])
 
-  const handleCreateReply = useCallback(async (commentId: string) => {
-    const content = replyDrafts[commentId]?.trim()
+  const handleCreateReply = useCallback(async (comment: ProjectComment) => {
+    const content = replyDrafts[comment.id]?.trim()
     if (!content) {
       return
     }
 
     try {
-      const response = await apiClient.post<ProjectComment>(`/api/projects/${project.id}/files/${activeFile.id}/comments/${commentId}/replies`, {
+      const response = await apiClient.post<ProjectComment>(`/api/projects/${project.id}/files/${comment.fileId}/comments/${comment.id}/replies`, {
         content,
       })
 
-      setCommentsByFileId((current) => ({
-        ...current,
-        [activeFile.id]: sortComments((current[activeFile.id] ?? []).map((comment) => comment.id === commentId ? response.data : comment)),
-      }))
-      setReplyDrafts((current) => ({ ...current, [commentId]: '' }))
-      setHighlightedCommentId(commentId)
+      upsertCommentInState(response.data)
+      setReplyDrafts((current) => ({ ...current, [comment.id]: '' }))
+      setHighlightedCommentId(comment.id)
     } catch (error: any) {
       alert(error?.response?.data?.error ?? 'Failed to add reply.')
     }
-  }, [activeFile.id, project.id, replyDrafts])
+  }, [project.id, replyDrafts, upsertCommentInState])
 
   const handleToggleCommentResolved = useCallback(async (comment: ProjectComment, resolved: boolean) => {
     try {
-      const response = await apiClient.patch<ProjectComment>(`/api/projects/${project.id}/files/${activeFile.id}/comments/${comment.id}`, {
+      const response = await apiClient.patch<ProjectComment>(`/api/projects/${project.id}/files/${comment.fileId}/comments/${comment.id}`, {
         status: resolved ? 'resolved' : 'open',
       })
 
-      setCommentsByFileId((current) => ({
-        ...current,
-        [activeFile.id]: sortComments((current[activeFile.id] ?? []).map((entry) => entry.id === comment.id ? response.data : entry)),
-      }))
+      upsertCommentInState(response.data)
       setHighlightedCommentId(comment.id)
     } catch (error: any) {
       alert(error?.response?.data?.error ?? `Failed to ${resolved ? 'resolve' : 'reopen'} comment.`)
     }
-  }, [activeFile.id, project.id])
+  }, [project.id, upsertCommentInState])
 
-  const handleAssignComment = useCallback(async (comment: ProjectComment, assigneeUserId: string | null) => {
+  const handleSetCommentAssignees = useCallback(async (comment: ProjectComment, selection: AssigneeSelection) => {
     try {
-      const { data } = await apiClient.patch<ProjectComment>(
-        `/api/projects/${project.id}/files/${activeFile.id}/comments/${comment.id}/assign`,
-        { assigneeUserId }
-      )
-      setCommentsByFileId((current) => ({
-        ...current,
-        [activeFile.id]: (current[activeFile.id] ?? []).map((c) => c.id === data.id ? data : c),
-      }))
+      const { data } = await apiClient.put<ProjectComment>(`/api/projects/${project.id}/comments/${comment.id}/assignees`, {
+        assigneeUserIds: selection.userIds,
+        primaryAssigneeUserId: selection.primaryUserId,
+      })
+      upsertCommentInState(data)
     } catch (error: any) {
       alert(error?.response?.data?.error ?? 'Failed to assign comment.')
     }
-  }, [activeFile.id, project.id])
+  }, [project.id, upsertCommentInState])
 
   const handleDeleteComment = useCallback(async (comment: ProjectComment) => {
     if (!window.confirm('Delete this comment thread permanently?')) {
@@ -4732,10 +4755,10 @@ function ProjectWorkspace({
     }
 
     try {
-      await apiClient.delete(`/api/projects/${project.id}/files/${activeFile.id}/comments/${comment.id}`)
+      await apiClient.delete(`/api/projects/${project.id}/files/${comment.fileId}/comments/${comment.id}`)
       setCommentsByFileId((current) => ({
         ...current,
-        [activeFile.id]: (current[activeFile.id] ?? []).filter((entry) => entry.id !== comment.id),
+        [comment.fileId]: (current[comment.fileId] ?? []).filter((entry) => entry.id !== comment.id),
       }))
       setReplyDrafts((current) => {
         const next = { ...current }
@@ -4747,7 +4770,7 @@ function ProjectWorkspace({
     } catch (error: any) {
       alert(error?.response?.data?.error ?? 'Failed to delete comment.')
     }
-  }, [activeFile.id, project.id])
+  }, [project.id])
 
   useEffect(() => {
     if (!activeNoteDialogCommentId) {
@@ -6566,9 +6589,9 @@ function ProjectWorkspace({
               isLoadingSuggestions={isLoadingSuggestions}
               highlightedCommentId={highlightedCommentId}
               trackChangesEnabled={trackChangesEnabled}
-              commentDraftAssigneeUserId={commentDraftAssigneeUserId}
+              commentDraftAssignees={commentDraftAssignees}
               onCommentDraftChange={setCommentDraft}
-              onCommentDraftAssigneeChange={setCommentDraftAssigneeUserId}
+              onCommentDraftAssigneesChange={setCommentDraftAssignees}
               onSuggestionDraftChange={setSuggestionDraft}
               onTrackChangesEnabledChange={setTrackChangesEnabled}
               onReplyDraftChange={handleReplyDraftChange}
@@ -6578,7 +6601,10 @@ function ProjectWorkspace({
               onCreateReply={handleCreateReply}
               onDeleteComment={handleDeleteComment}
               onToggleResolved={handleToggleCommentResolved}
-              onAssignComment={handleAssignComment}
+              onSetAssignees={handleSetCommentAssignees}
+              allComments={allProjectComments}
+              filePaths={filePathsById}
+              activeFileId={activeFile.id}
               canManageComments={canEdit}
               currentUserId={userId}
               members={project.members}
@@ -8515,11 +8541,14 @@ function CommentsPanel({
   canManageComments,
   currentUserId,
   members,
-  onAssignComment,
+  onSetAssignees,
+  allComments,
+  filePaths,
+  activeFileId,
   comments,
   suggestions,
   commentDraft,
-  commentDraftAssigneeUserId,
+  commentDraftAssignees,
   suggestionDraft,
   replyDrafts,
   commentSelection,
@@ -8530,7 +8559,7 @@ function CommentsPanel({
   highlightedCommentId,
   trackChangesEnabled,
   onCommentDraftChange,
-  onCommentDraftAssigneeChange,
+  onCommentDraftAssigneesChange,
   onSuggestionDraftChange,
   onTrackChangesEnabledChange,
   onReplyDraftChange,
@@ -8551,8 +8580,8 @@ function CommentsPanel({
   comments: ProjectComment[]
   suggestions: ProjectReviewSuggestion[]
   commentDraft: string
-  commentDraftAssigneeUserId: string | null
-  onCommentDraftAssigneeChange: (userId: string | null) => void
+  commentDraftAssignees: AssigneeSelection
+  onCommentDraftAssigneesChange: (selection: AssigneeSelection) => void
   suggestionDraft: string
   replyDrafts: Record<string, string>
   commentSelection: CommentSelectionAnchor | null
@@ -8569,22 +8598,20 @@ function CommentsPanel({
   onCreateComment: () => void
   onCreateSuggestion: () => void
   onSuggestionDecision: (suggestionId: string, action: 'accept' | 'reject') => void
-  onCreateReply: (commentId: string) => void
+  onCreateReply: (comment: ProjectComment) => void
   onDeleteComment: (comment: ProjectComment) => void
   onToggleResolved: (comment: ProjectComment, resolved: boolean) => void
-  onAssignComment: (comment: ProjectComment, assigneeUserId: string | null) => void
+  onSetAssignees: (comment: ProjectComment, selection: AssigneeSelection) => void
+  allComments: ProjectComment[]
+  filePaths: Record<string, string>
+  activeFileId: string
   onClose: () => void
   onCommentClick: (comment: ProjectComment) => void
   members: ProjectMember[]
   inSidebar?: boolean
 }) {
-  const commentsParentRef = useRef<HTMLDivElement>(null)
-  const commentsVirtualizer = useVirtualizer({
-    count: comments.length,
-    getScrollElement: () => commentsParentRef.current,
-    estimateSize: () => 180,
-    overscan: 5,
-  })
+  const [isPickingDraftAssignees, setIsPickingDraftAssignees] = useState(false)
+  void comments
 
   return (
     <aside className={styles.themePanel}>
@@ -8624,19 +8651,24 @@ function CommentsPanel({
           maxLength={5000}
         />
         {canComment && members.length > 1 ? (
-          <div className={styles.commentAssignRow}>
-            <label className={styles.commentAssignLabel}>Assign to</label>
-            <select
-              className={styles.commentAssignSelect}
-              value={commentDraftAssigneeUserId ?? ''}
-              onChange={(e) => onCommentDraftAssigneeChange(e.target.value || null)}
-            >
-              <option value="">Unassigned</option>
-              {members.map((m) => (
-                <option key={m.userId} value={m.userId}>{m.name || m.email}</option>
-              ))}
-            </select>
-          </div>
+          isPickingDraftAssignees ? (
+            <AssigneePicker
+              members={members}
+              value={commentDraftAssignees}
+              onCancel={() => setIsPickingDraftAssignees(false)}
+              onApply={(selection) => { onCommentDraftAssigneesChange(selection); setIsPickingDraftAssignees(false) }}
+            />
+          ) : (
+            <AssigneeChips
+              comment={{
+                assignees: commentDraftAssignees.userIds.map((userId) => {
+                  const member = members.find((entry) => entry.userId === userId)
+                  return { userId, name: member?.name ?? null, email: member?.email ?? '', avatarUrl: member?.avatarUrl ?? null, isPrimary: userId === commentDraftAssignees.primaryUserId }
+                }),
+              } as ProjectComment}
+              onEdit={() => setIsPickingDraftAssignees(true)}
+            />
+          )
         ) : null}
         <div className={styles.panelIconActions}>
           <button
@@ -8716,132 +8748,24 @@ function CommentsPanel({
         </div>
       </section>
 
-      <section className={styles.themeSection}>
-        <h3>Anchored Threads</h3>
-        {commentsError ? <p className={styles.searchError}>{commentsError}</p> : null}
-        {isLoadingComments ? <p className={styles.panelDescription}>Loading comments…</p> : null}
-        {!isLoadingComments && comments.length === 0 ? (
-          <p className={styles.panelDescription}>No comments on this file yet.</p>
-        ) : null}
-
-        <div ref={commentsParentRef} className={styles.commentList}>
-          <div style={{ height: commentsVirtualizer.getTotalSize(), position: 'relative' }}>
-            {commentsVirtualizer.getVirtualItems().map((virtualItem) => {
-              const comment = comments[virtualItem.index]
-              return (
-                <div
-                  key={comment.id}
-                  ref={commentsVirtualizer.measureElement}
-                  data-index={virtualItem.index}
-                  style={{ position: 'absolute', top: 0, left: 0, right: 0, transform: `translateY(${virtualItem.start}px)` }}
-                >
-                  <button
-                    className={[styles.commentCard, highlightedCommentId === comment.id ? styles.commentCardActive : ''].filter(Boolean).join(' ')}
-                    onClick={() => onCommentClick(comment)}
-                  >
-                    <div className={styles.commentCardHeader}>
-                      <div className={styles.commentAuthorBlock}>
-                        <strong>{comment.authorName}</strong>
-                        <span className={styles.commentMeta}>{formatCommentTimestamp(comment.createdAt)}</span>
-                      </div>
-                      <span className={commentStatusClassName(comment.status)}>
-                        {commentStatusLabel(comment.status)}
-                      </span>
-                    </div>
-                    <span className={styles.commentRange}>{formatCommentAnchor(comment)}</span>
-                    <div className={styles.commentExcerpt}>{comment.excerpt}</div>
-                    <p className={styles.commentBody}>{comment.content}</p>
-                    {comment.status === 'resolved' && comment.resolvedAt ? (
-                      <p className={styles.commentResolutionMeta}>
-                        Resolved by {comment.resolvedByName ?? 'a collaborator'} on {formatCommentTimestamp(comment.resolvedAt)}
-                      </p>
-                    ) : null}
-                    {comment.status === 'deleted' ? (
-                      <p className={styles.commentDeletedMeta}>The anchored text is no longer present in the document.</p>
-                    ) : null}
-
-                    {comment.replies.length > 0 ? (
-                      <div className={styles.replyList}>
-                        {comment.replies.map((reply) => (
-                          <div key={reply.id} className={styles.replyCard}>
-                            <div className={styles.replyHeader}>
-                              <strong>{reply.authorName}</strong>
-                              <span className={styles.commentMeta}>{formatCommentTimestamp(reply.createdAt)}</span>
-                            </div>
-                            <p className={styles.replyBody}>{reply.content}</p>
-                          </div>
-                        ))}
-                      </div>
-                    ) : null}
-
-                    <div className={styles.commentActionRow} onClick={(event) => event.stopPropagation()}>
-                      {comment.status !== 'deleted' && canManageComments ? (
-                        <div className={styles.commentAssignRow}>
-                          <label className={styles.commentAssignLabel}>Assign to</label>
-                          <select
-                            className={styles.commentAssignSelect}
-                            value={comment.assigneeUserId ?? ''}
-                            onChange={(event) => onAssignComment(comment, event.target.value || null)}
-                          >
-                            <option value="">Unassigned</option>
-                            {members.map((m) => (
-                              <option key={m.userId} value={m.userId}>{m.name ?? m.email}</option>
-                            ))}
-                          </select>
-                        </div>
-                      ) : comment.assigneeUserId ? (
-                        <p className={styles.commentAssignedTo}>Assigned to {comment.assigneeName ?? comment.assigneeEmail}</p>
-                      ) : null}
-                      {comment.status !== 'deleted' ? (
-                        <textarea
-                          className={styles.replyInput}
-                          rows={2}
-                          value={replyDrafts[comment.id] ?? ''}
-                          onChange={(event) => onReplyDraftChange(comment.id, event.target.value)}
-                          placeholder="Reply to this thread…"
-                        />
-                      ) : null}
-                      <div className={styles.commentActionButtons}>
-                        {comment.status !== 'deleted' ? (
-                          <button
-                            className={styles.panelIconBtn}
-                            onClick={() => onCreateReply(comment.id)}
-                            disabled={!replyDrafts[comment.id]?.trim()}
-                            title="Reply"
-                            aria-label="Reply"
-                          >
-                            <CommentsIcon size={16} aria-hidden />
-                          </button>
-                        ) : null}
-                        {comment.status !== 'deleted' ? (
-                          <button
-                            className={comment.status === 'resolved' ? styles.panelIconBtn : styles.primaryIconBtn}
-                            onClick={() => onToggleResolved(comment, comment.status !== 'resolved')}
-                            title={comment.status === 'resolved' ? 'Reopen thread' : 'Resolve thread'}
-                            aria-label={comment.status === 'resolved' ? 'Reopen thread' : 'Resolve thread'}
-                          >
-                            {comment.status === 'resolved' ? <RefreshCw size={16} aria-hidden /> : <CheckIcon size={16} aria-hidden />}
-                          </button>
-                        ) : null}
-                        {(canManageComments || comment.authorUserId === currentUserId) ? (
-                          <button
-                            className={styles.dangerIconBtn}
-                            onClick={() => onDeleteComment(comment)}
-                            title="Delete thread"
-                            aria-label="Delete thread"
-                          >
-                            <TrashIcon size={16} aria-hidden />
-                          </button>
-                        ) : null}
-                      </div>
-                    </div>
-                  </button>
-                </div>
-              )
-            })}
-          </div>
-        </div>
-      </section>
+      <CommentThreads
+        comments={allComments}
+        filePaths={filePaths}
+        activeFileId={activeFileId}
+        currentUserId={currentUserId}
+        members={members}
+        canManageComments={canManageComments}
+        highlightedCommentId={highlightedCommentId}
+        replyDrafts={replyDrafts}
+        isLoading={isLoadingComments}
+        error={commentsError}
+        onCommentClick={onCommentClick}
+        onReplyDraftChange={onReplyDraftChange}
+        onCreateReply={onCreateReply}
+        onToggleResolved={onToggleResolved}
+        onDeleteComment={onDeleteComment}
+        onSetAssignees={onSetAssignees}
+      />
     </aside>
   )
 }
@@ -8862,7 +8786,7 @@ function NoteThreadDialog({
   currentUserId: string
   canManageComments: boolean
   onReplyDraftChange: (commentId: string, value: string) => void
-  onCreateReply: (commentId: string) => void
+  onCreateReply: (comment: ProjectComment) => void
   onToggleResolved: (comment: ProjectComment, resolved: boolean) => void
   onDeleteComment: (comment: ProjectComment) => void
   onClose: () => void
@@ -8948,7 +8872,7 @@ function NoteThreadDialog({
             {comment.status !== 'deleted' ? (
               <button
                 className={styles.panelIconBtn}
-                onClick={() => onCreateReply(comment.id)}
+                onClick={() => onCreateReply(comment)}
                 disabled={!replyDraft.trim()}
                 title="Reply"
                 aria-label="Reply"

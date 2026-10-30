@@ -5,6 +5,7 @@ import type {
   ProjectEcosystemSettings,
   ProjectComment,
   ProjectCommentPdfAnnotation,
+  ProjectCommentAssignee,
   ProjectCommentReply,
   ProjectCompileSettings,
   ProjectDetail,
@@ -854,6 +855,24 @@ export async function initializeDatabase(): Promise<void> {
         ALTER TABLE users ADD COLUMN IF NOT EXISTS selected_theme_settings TEXT;
         ALTER TABLE project_comments ADD COLUMN IF NOT EXISTS assignee_user_id TEXT REFERENCES users(id) ON DELETE SET NULL;
         ALTER TABLE project_comments ADD COLUMN IF NOT EXISTS resolved_by_name TEXT;
+        -- Several assignees per thread; at most one is the main responsible.
+        -- project_comments.assignee_user_id mirrors the main responsible.
+        CREATE TABLE IF NOT EXISTS project_comment_assignees (
+          comment_id TEXT NOT NULL REFERENCES project_comments(id) ON DELETE CASCADE,
+          user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+          is_primary BOOLEAN NOT NULL DEFAULT FALSE,
+          assigned_by_user_id TEXT REFERENCES users(id) ON DELETE SET NULL,
+          assigned_at BIGINT NOT NULL,
+          PRIMARY KEY (comment_id, user_id)
+        );
+        CREATE INDEX IF NOT EXISTS idx_project_comment_assignees_user_id ON project_comment_assignees(user_id);
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_project_comment_assignees_primary ON project_comment_assignees(comment_id) WHERE is_primary;
+        INSERT INTO project_comment_assignees (comment_id, user_id, is_primary, assigned_at)
+          SELECT id, assignee_user_id, TRUE, updated_at FROM project_comments WHERE assignee_user_id IS NOT NULL
+          ON CONFLICT DO NOTHING;
+        CREATE INDEX IF NOT EXISTS idx_project_comments_project_id ON project_comments(project_id);
+        ALTER TABLE project_notifications DROP CONSTRAINT IF EXISTS project_notifications_type_check;
+        ALTER TABLE project_notifications ADD CONSTRAINT project_notifications_type_check CHECK (type IN ('mention', 'assignment', 'reply'));
 
         CREATE TABLE IF NOT EXISTS ai_chat_messages (
           id TEXT PRIMARY KEY,
@@ -1656,7 +1675,101 @@ export async function listProjectComments(fileId: string): Promise<ProjectCommen
     repliesByCommentId.set(reply.comment_id, bucket)
   }
 
-  return rows.map((row) => rowToProjectComment(row, repliesByCommentId.get(row.id) ?? []))
+  return attachCommentAssignees(rows.map((row) => rowToProjectComment(row, repliesByCommentId.get(row.id) ?? [])))
+}
+
+/** Every thread of a project (files in the trash excepted), with the file path. */
+export async function listAllProjectComments(projectId: string): Promise<ProjectComment[]> {
+  type Row = ProjectCommentRow & { file_path: string }
+  const [rows, replies] = await Promise.all([
+    queryRows<Row>(pool, `
+      SELECT pc.*, COALESCE(u.name, pc.anonymous_author_name, 'Anonymous reviewer') AS author_name, COALESCE(u.email, pc.anonymous_author_email, '') AS author_email, u.avatar_url AS author_avatar_url,
+             resolver.name AS resolved_by_name,
+             assignee.name AS assignee_name, assignee.email AS assignee_email,
+             pf.path AS file_path
+      FROM project_comments pc
+      INNER JOIN project_files pf ON pf.id = pc.file_id
+      LEFT JOIN users u ON u.id = pc.author_user_id
+      LEFT JOIN users resolver ON resolver.id = pc.resolved_by_user_id
+      LEFT JOIN users assignee ON assignee.id = pc.assignee_user_id
+      WHERE pc.project_id = $1 AND pf.path NOT LIKE 'Trash/%'
+      ORDER BY pf.path ASC, pc.start_line ASC, pc.start_column ASC, pc.created_at ASC
+    `, [projectId]),
+    queryRows<ProjectCommentReplyRow>(pool, `
+      SELECT pcr.*, COALESCE(u.name, pcr.anonymous_author_name, 'Anonymous reviewer') AS author_name, COALESCE(u.email, pcr.anonymous_author_email, '') AS author_email, u.avatar_url AS author_avatar_url
+      FROM project_comment_replies pcr
+      LEFT JOIN users u ON u.id = pcr.author_user_id
+      WHERE pcr.project_id = $1
+      ORDER BY pcr.created_at ASC
+    `, [projectId]),
+  ])
+
+  const repliesByCommentId = new Map<string, ProjectCommentReply[]>()
+  for (const reply of replies) {
+    const bucket = repliesByCommentId.get(reply.comment_id) ?? []
+    bucket.push(rowToProjectCommentReply(reply))
+    repliesByCommentId.set(reply.comment_id, bucket)
+  }
+
+  return attachCommentAssignees(rows.map((row) => ({
+    ...rowToProjectComment(row, repliesByCommentId.get(row.id) ?? []),
+    filePath: row.file_path,
+  })))
+}
+
+/** Fill in `assignees` (main responsible first) for the given threads. */
+export async function attachCommentAssignees(comments: ProjectComment[]): Promise<ProjectComment[]> {
+  if (comments.length === 0) return comments
+  const rows = await queryRows<{ comment_id: string; user_id: string; is_primary: boolean; name: string | null; email: string; avatar_url: string | null }>(pool, `
+    SELECT a.comment_id, a.user_id, a.is_primary, u.name, u.email, u.avatar_url
+    FROM project_comment_assignees a
+    INNER JOIN users u ON u.id = a.user_id
+    WHERE a.comment_id = ANY($1::text[])
+    ORDER BY a.is_primary DESC, a.assigned_at ASC
+  `, [comments.map((comment) => comment.id)])
+  const byComment = new Map<string, ProjectCommentAssignee[]>()
+  for (const row of rows) {
+    const bucket = byComment.get(row.comment_id) ?? []
+    bucket.push({ userId: row.user_id, name: row.name, email: row.email, avatarUrl: row.avatar_url, isPrimary: row.is_primary })
+    byComment.set(row.comment_id, bucket)
+  }
+  for (const comment of comments) {
+    comment.assignees = byComment.get(comment.id) ?? []
+  }
+  return comments
+}
+
+/**
+ * Replace a thread's assignees. `primaryUserId` (one of `userIds`, or null)
+ * is the main responsible. Returns the users that were newly assigned.
+ */
+export async function setProjectCommentAssignees(input: {
+  commentId: string
+  userIds: string[]
+  primaryUserId: string | null
+  actorUserId: string
+}): Promise<string[]> {
+  const userIds = [...new Set(input.userIds)]
+  const primaryUserId = input.primaryUserId && userIds.includes(input.primaryUserId) ? input.primaryUserId : null
+  const now = Date.now()
+  return withTransaction(async (client) => {
+    const existing = (await client.query<{ user_id: string }>(
+      'SELECT user_id FROM project_comment_assignees WHERE comment_id = $1',
+      [input.commentId],
+    )).rows.map((row) => row.user_id)
+    await client.query('DELETE FROM project_comment_assignees WHERE comment_id = $1 AND NOT (user_id = ANY($2::text[]))', [input.commentId, userIds])
+    // Clear the old main responsible first: the unique index allows one.
+    await client.query('UPDATE project_comment_assignees SET is_primary = FALSE WHERE comment_id = $1', [input.commentId])
+    for (const userId of userIds) {
+      await client.query(`
+        INSERT INTO project_comment_assignees (comment_id, user_id, is_primary, assigned_by_user_id, assigned_at)
+        VALUES ($1, $2, $3, $4, $5)
+        ON CONFLICT (comment_id, user_id) DO UPDATE SET is_primary = EXCLUDED.is_primary
+      `, [input.commentId, userId, userId === primaryUserId, input.actorUserId, now])
+    }
+    await client.query('UPDATE project_comments SET assignee_user_id = $1, updated_at = $2 WHERE id = $3', [primaryUserId, now, input.commentId])
+    return userIds.filter((userId) => !existing.includes(userId))
+  })
 }
 
 export async function createProjectComment(input: {
@@ -1733,7 +1846,8 @@ export async function getProjectCommentById(commentId: string): Promise<ProjectC
     ORDER BY pcr.created_at ASC
   `, [commentId])
 
-  return rowToProjectComment(row, replies.map(rowToProjectCommentReply))
+  const [comment] = await attachCommentAssignees([rowToProjectComment(row, replies.map(rowToProjectCommentReply))])
+  return comment
 }
 
 export async function createProjectCommentReply(input: {
@@ -1800,10 +1914,10 @@ export async function createProjectNotifications(input: {
   fileId: string
   commentId: string
   actorUserId: string
-  type: 'mention'
+  type: ProjectNotification['type']
   excerpt: string
 }): Promise<void> {
-  const recipientUserIds = [...new Set(input.recipientUserIds)].filter(Boolean)
+  const recipientUserIds = [...new Set(input.recipientUserIds)].filter((id) => Boolean(id) && id !== input.actorUserId)
   if (recipientUserIds.length === 0) {
     return
   }
@@ -2437,6 +2551,7 @@ function rowToProjectComment(row: ProjectCommentRow, replies: ProjectCommentRepl
     assigneeUserId: row.assignee_user_id,
     assigneeName: row.assignee_name,
     assigneeEmail: row.assignee_email,
+    assignees: [],
     reviewRequestId: row.review_request_id,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
@@ -2445,11 +2560,13 @@ function rowToProjectComment(row: ProjectCommentRow, replies: ProjectCommentRepl
   }
 }
 
-export async function assignProjectComment(commentId: string, assigneeUserId: string | null): Promise<void> {
-  await pool.query(
-    `UPDATE project_comments SET assignee_user_id = $1, updated_at = $2 WHERE id = $3`,
-    [assigneeUserId, Date.now(), commentId]
-  )
+export async function assignProjectComment(commentId: string, assigneeUserId: string | null, actorUserId: string): Promise<string[]> {
+  return setProjectCommentAssignees({
+    commentId,
+    userIds: assigneeUserId ? [assigneeUserId] : [],
+    primaryUserId: assigneeUserId,
+    actorUserId,
+  })
 }
 
 export async function listCommentsAssignedToUser(userId: string): Promise<ProjectComment[]> {
@@ -2461,10 +2578,10 @@ export async function listCommentsAssignedToUser(userId: string): Promise<Projec
     LEFT JOIN users u ON u.id = pc.author_user_id
     LEFT JOIN users resolver ON resolver.id = pc.resolved_by_user_id
     LEFT JOIN users assignee ON assignee.id = pc.assignee_user_id
-    WHERE pc.assignee_user_id = $1 AND pc.status = 'open'
+    WHERE EXISTS (SELECT 1 FROM project_comment_assignees pca WHERE pca.comment_id = pc.id AND pca.user_id = $1) AND pc.status = 'open'
     ORDER BY pc.created_at DESC
   `, [userId])
-  return rows.map((row) => rowToProjectComment(row, []))
+  return attachCommentAssignees(rows.map((row) => rowToProjectComment(row, [])))
 }
 
 export async function listCommentsInvolvingUser(userId: string): Promise<ProjectComment[]> {
@@ -2488,7 +2605,7 @@ export async function listCommentsInvolvingUser(userId: string): Promise<Project
       WHERE pc.status != 'deleted'
         AND (
           pc.author_user_id = $1
-          OR pc.assignee_user_id = $1
+          OR EXISTS (SELECT 1 FROM project_comment_assignees pca WHERE pca.comment_id = pc.id AND pca.user_id = $1)
           OR EXISTS (
             SELECT 1 FROM project_comment_replies pcr
             WHERE pcr.comment_id = pc.id AND pcr.author_user_id = $1
@@ -2508,7 +2625,7 @@ export async function listCommentsInvolvingUser(userId: string): Promise<Project
       WHERE pc.status != 'deleted'
         AND (
           pc.author_user_id = $1
-          OR pc.assignee_user_id = $1
+          OR EXISTS (SELECT 1 FROM project_comment_assignees pca WHERE pca.comment_id = pc.id AND pca.user_id = $1)
           OR pcr.author_user_id = $1
         )
       ORDER BY pcr.created_at ASC
@@ -2522,11 +2639,11 @@ export async function listCommentsInvolvingUser(userId: string): Promise<Project
     repliesByCommentId.set(r.comment_id, bucket)
   }
 
-  return rows.map((row) => ({
+  return attachCommentAssignees(rows.map((row) => ({
     ...rowToProjectComment(row, repliesByCommentId.get(row.id) ?? []),
     projectTitle: row.project_title,
     filePath: row.file_path,
-  }))
+  })))
 }
 
 export async function listProjectCommentsInvolvingUser(projectId: string, userId: string): Promise<ProjectComment[]> {
@@ -2563,10 +2680,10 @@ export async function listProjectCommentsInvolvingUser(projectId: string, userId
     repliesByCommentId.set(r.comment_id, bucket)
   }
 
-  return rows.map((row) => ({
+  return attachCommentAssignees(rows.map((row) => ({
     ...rowToProjectComment(row, repliesByCommentId.get(row.id) ?? []),
     filePath: row.file_path,
-  }))
+  })))
 }
 
 function parseProjectCommentPdfAnnotation(value: string | null): ProjectCommentPdfAnnotation | null {
