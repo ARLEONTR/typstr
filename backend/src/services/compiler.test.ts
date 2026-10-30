@@ -183,3 +183,12 @@ test('the LaTeX engine follows the TeX program comment and local classes', async
     file('doc/mystyle.sty', '\\RequirePackage{luacode}'),
   ], 'doc/main.tex'), 'lualatex')
 })
+
+test('typst diagnostics point at project paths, not the compile workspace', async () => {
+  const stderr = 'error: unknown variable: foo\n  ┌─ ../tmp/typstr-pdf-llzzr1/chapters/a.typ:3:14\n  │\n3 │ Giriş #foo()\n  │        ^^^'
+  const [diagnostic] = parseCompileDiagnostics(stderr)
+  assert.equal(diagnostic.filePath, 'chapters/a.typ')
+  assert.equal(diagnostic.line, 3)
+  assert.equal(diagnostic.column, 14)
+  assert.doesNotMatch(diagnostic.raw, /typstr-pdf|\/tmp\//)
+})

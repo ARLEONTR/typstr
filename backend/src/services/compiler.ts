@@ -9,6 +9,7 @@ import pLimit from 'p-limit'
 import type { CompileDiagnostic } from '../types.js'
 import { fontPathsFromWorkspace } from './ecosystem.js'
 import { env } from '../env.js'
+import { logger } from '../logger.js'
 
 
 const MAX_CONCURRENT = parseInt(process.env.MAX_CONCURRENT_COMPILES ?? '0') || Math.max(2, os.cpus().length)
@@ -392,7 +393,7 @@ export async function compileTypstProjectToSvg(input: {
     )
 
     proc.stderr.on('data', (chunk: Buffer) => {
-      console.error(`[Typst SVG Compiler Stderr]: ${chunk.toString()}`)
+      logger.debug(`[Typst SVG Compiler Stderr]: ${chunk.toString()}`)
       errChunks.push(chunk)
     })
 
@@ -505,7 +506,7 @@ export async function compileTypstProjectToPdf(input: {
       )
 
       proc.stderr.on('data', (chunk: Buffer) => {
-        console.error(`[Typst PDF Compiler Stderr]: ${chunk.toString()}`)
+        logger.debug(`[Typst PDF Compiler Stderr]: ${chunk.toString()}`)
         errChunks.push(chunk)
       })
 
@@ -543,7 +544,7 @@ export async function compileTypstProjectToPdf(input: {
             resolve(readFileSync(outputFile))
           } else {
             const errMsg = stripAnsi(Buffer.concat(errChunks).toString('utf8')).trim()
-            reject(new Error(errMsg || `typst exited with code ${code}`))
+            reject(new Error(stripCompileWorkspace(errMsg) || `typst exited with code ${code}`))
           }
         } finally {
           rmSync(tmpDir, { recursive: true, force: true })
@@ -1240,6 +1241,15 @@ function isDependencySourceFile(filePath: string, mimeType?: string): boolean {
   return /\.(typ|txt|md|yaml|yml|json|toml|xml|bib)$/i.test(filePath)
 }
 
+/**
+ * Turn paths inside a temporary compile workspace (".../typstr-pdf-AbC123/ch/a.typ")
+ * into project paths ("ch/a.typ"): the workspace path means nothing to users
+ * and reveals the server's directory layout.
+ */
+export function stripCompileWorkspace(text: string): string {
+  return text.replace(/[^\s"'`(]*?typstr-(?:[a-z]+-)?[A-Za-z0-9]{6}\//g, '')
+}
+
 export function parseCompileDiagnostics(stderr: string, fallbackPath?: string): CompileDiagnostic[] {
   const normalized = stripAnsi(stderr).trim()
   if (!normalized) {
@@ -1269,15 +1279,17 @@ function parseTypstCompileDiagnostics(normalized: string, fallbackPath?: string)
     const firstLine = lines[0] ?? ''
     const level = /^warning:/i.test(firstLine) ? 'warning' : 'error'
     const message = firstLine.replace(/^(error|warning):\s*/i, '').trim() || 'Compilation issue'
-    const locationMatch = block.match(/([^\s:][^:\n]*\.[A-Za-z0-9]+):(\d+)(?::(\d+))?/)
+    // Typst marks the location with "┌─ path:line:col"; prefer that line.
+    const locationMatch = block.match(/┌─\s*(\S+?):(\d+)(?::(\d+))?(?:\s|$)/)
+      ?? block.match(/([^\s:][^:\n]*\.[A-Za-z0-9]+):(\d+)(?::(\d+))?/)
 
     return {
       level,
       message,
-      filePath: locationMatch?.[1] ?? fallbackPath ?? null,
+      filePath: locationMatch?.[1] ? stripCompileWorkspace(locationMatch[1]) : fallbackPath ?? null,
       line: locationMatch?.[2] ? Number(locationMatch[2]) : null,
       column: locationMatch?.[3] ? Number(locationMatch[3]) : null,
-      raw: block,
+      raw: stripCompileWorkspace(block),
     }
   })
 }

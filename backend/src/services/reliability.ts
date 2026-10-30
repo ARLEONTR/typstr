@@ -375,7 +375,10 @@ async function flushCoalescedCompile(
 
   try {
     await consumeCompileQuota(payload.userId)
+    // One attempt: a failed compile is almost always an error in the document,
+    // and retrying ran typst three times for the same error.
     const result = await runBackgroundJobAndWait<CompileJobResult>('compile-project', payload, {
+      maxAttempts: 1,
       timeoutMs: options.timeoutMs,
     })
     for (const waiter of waiters) {
