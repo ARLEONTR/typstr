@@ -77,6 +77,7 @@ export const env = {
   rateLimitCompileMax: getNumberEnv('RATE_LIMIT_COMPILE_MAX', isProduction ? 60 : 180),
   rateLimitExportMax: getNumberEnv('RATE_LIMIT_EXPORT_MAX', isProduction ? 30 : 90),
   rateLimitUploadMax: getNumberEnv('RATE_LIMIT_UPLOAD_MAX', isProduction ? 30 : 60),
+  rateLimitMcpMax: getNumberEnv('RATE_LIMIT_MCP_MAX', isProduction ? 120 : 600),
   compileHttpConcurrencyMax: getNumberEnv('COMPILE_HTTP_CONCURRENCY_MAX', isProduction ? 96 : 192),
   exportHttpConcurrencyMax: getNumberEnv('EXPORT_HTTP_CONCURRENCY_MAX', isProduction ? 48 : 96),
   requestBodyLimitMb: getNumberEnv('REQUEST_BODY_LIMIT_MB', 64),

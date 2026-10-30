@@ -60,6 +60,7 @@ import {
 
 const LazyMoveProjectModal = lazy(() => import('./DocumentList').then(m => ({ default: m.MoveProjectModal })))
 const LazyDeleteProjectModal = lazy(() => import('./DocumentList').then(m => ({ default: m.DeleteProjectModal })))
+const LazyAgentsPanel = lazy(() => import('../Settings/AgentsPanel'))
 
 type DashboardProject = ProjectSummary & {
   state: ProjectState
@@ -118,13 +119,14 @@ const SHORTCUT_BINDING_LABELS: Array<{ action: ShortcutAction; label: string; de
   { action: 'toggleFullscreen', label: 'Full screen', description: 'Show the editor on the whole screen, or leave full screen.' },
 ]
 
-type SettingsTabId = 'general' | 'profile' | 'subscription' | 'shortcuts' | 'permissions'
+type SettingsTabId = 'general' | 'profile' | 'subscription' | 'shortcuts' | 'agents' | 'permissions'
 
 const SETTINGS_TABS: Array<{ id: SettingsTabId; label: string }> = [
   { id: 'general', label: 'General' },
   { id: 'profile', label: 'Profile' },
   { id: 'subscription', label: 'Subscription' },
   { id: 'shortcuts', label: 'Shortcuts' },
+  { id: 'agents', label: 'AI agents (MCP)' },
   { id: 'permissions', label: 'Permissions' },
 ]
 
@@ -1812,6 +1814,14 @@ export default function DocumentList() {
                             </div>
                           </div>
                         </div>
+                      </div>
+                    )}
+
+                    {settingsTab === 'agents' && (
+                      <div className={styles.settingsSection}>
+                        <Suspense fallback={<p>Loading…</p>}>
+                          <LazyAgentsPanel />
+                        </Suspense>
                       </div>
                     )}
 

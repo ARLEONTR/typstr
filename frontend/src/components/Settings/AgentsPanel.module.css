@@ -1,0 +1,242 @@
+.panel {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  max-width: 900px;
+  color: var(--text-soft);
+}
+
+.intro h3 {
+  margin: 0 0 6px;
+  color: var(--text-bright);
+}
+
+.intro p {
+  margin: 0 0 10px;
+  line-height: 1.55;
+}
+
+.intro a {
+  color: var(--accent);
+}
+
+.steps {
+  margin: 0;
+  padding-left: 20px;
+  line-height: 1.7;
+}
+
+.card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 16px;
+  border-radius: 12px;
+  border: 1px solid var(--panel-border);
+  background: var(--card-bg);
+}
+
+.card h4 {
+  margin: 0;
+  color: var(--text-bright);
+  font-size: 15px;
+}
+
+.createRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 10px;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 12px;
+  color: var(--muted-text);
+}
+
+.field input,
+.field select {
+  min-width: 150px;
+  padding: 7px 9px;
+  border-radius: 8px;
+  border: 1px solid var(--panel-border);
+  background: var(--editor-bg, var(--page-bg));
+  color: var(--text-soft);
+  font: inherit;
+  font-size: 13px;
+}
+
+.primaryBtn,
+.dangerBtn,
+.copyBtn {
+  padding: 7px 14px;
+  border-radius: 8px;
+  border: 1px solid transparent;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.primaryBtn {
+  background: var(--accent);
+  color: #fff;
+}
+
+.primaryBtn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.dangerBtn {
+  padding: 4px 10px;
+  border-color: var(--panel-border);
+  background: transparent;
+  color: var(--danger);
+  font-weight: 500;
+}
+
+.newToken {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 12px;
+  border-radius: 10px;
+  border: 1px solid var(--success);
+  background: var(--success-bg);
+  color: var(--text-bright);
+}
+
+.hint {
+  margin: 0;
+  font-size: 12px;
+  color: var(--muted-text);
+}
+
+.error {
+  margin: 0;
+  color: var(--danger);
+  font-size: 13px;
+}
+
+.tokenTable,
+.toolTable {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.tokenTable th {
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--panel-border);
+  color: var(--muted-text);
+  font-size: 11px;
+  font-weight: 600;
+  text-align: left;
+  text-transform: uppercase;
+}
+
+.tokenTable td,
+.toolTable td {
+  padding: 7px 8px;
+  border-bottom: 1px solid var(--panel-border);
+  vertical-align: top;
+}
+
+.toolTable td:first-child {
+  width: 46%;
+}
+
+.toolTable code,
+.tokenTable code {
+  font-size: 12px;
+  color: var(--accent);
+}
+
+.badgeRead,
+.badgeWrite {
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.badgeRead {
+  color: var(--success);
+  background: var(--success-bg);
+}
+
+.badgeWrite {
+  color: var(--accent);
+  background: var(--action-bg);
+}
+
+.tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.tab,
+.tabActive {
+  padding: 6px 12px;
+  border-radius: 8px;
+  border: 1px solid var(--panel-border);
+  background: transparent;
+  color: var(--text-soft);
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.tabActive {
+  border-color: var(--accent);
+  background: var(--action-bg);
+  color: var(--text-bright);
+  font-weight: 600;
+}
+
+.copyBlock {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.copyLabel {
+  font-size: 12px;
+  color: var(--muted-text);
+}
+
+.code {
+  margin: 0;
+  padding: 12px 70px 12px 12px;
+  border-radius: 8px;
+  border: 1px solid var(--panel-border);
+  background: var(--editor-bg, var(--page-bg));
+  color: var(--text-bright);
+  font-size: 12px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+.copyBtn {
+  position: absolute;
+  right: 8px;
+  bottom: 8px;
+  padding: 3px 10px;
+  border-color: var(--panel-border);
+  background: var(--card-bg);
+  color: var(--text-soft);
+  font-weight: 500;
+}
+
+.examples,
+.notes {
+  margin: 0;
+  padding-left: 20px;
+  line-height: 1.6;
+  font-size: 13px;
+}

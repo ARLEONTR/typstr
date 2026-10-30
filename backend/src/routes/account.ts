@@ -3,12 +3,59 @@ import { getAuthenticatedUser } from '../auth.js'
 import { getDbPool, findUserById, sanitizeUser } from '../db.js'
 import { confirmEmailVerification, getBillingStatus, listVerifiedDomains, startEmailVerification } from '../services/billing.js'
 import type { WorkspaceTheme } from '../types.js'
+import { requireSessionAuth } from '../middleware/apiTokenAuth.js'
+import { createApiToken, listApiTokens, revokeApiToken } from '../services/apiTokens.js'
 
 const VALID_ACADEMIC_ROLES = new Set(['student', 'phd_student', 'postdoc', 'researcher', 'faculty', 'staff', 'other'])
 const VALID_THEME_FIELDS = new Set(['presetId', 'uiFontFamily', 'uiFontSize', 'editorFontFamily', 'editorFontSize'])
 const ORCID_ID_PATTERN = /^\d{4}-\d{4}-\d{4}-\d{3}[\dX]$/
 
 export const accountRouter = Router()
+
+// Personal access tokens (for LLM agents through MCP, scripts). Managed only
+// from a signed-in browser session, so a token cannot mint more tokens.
+accountRouter.get('/tokens', requireSessionAuth, async (req, res, next) => {
+  try {
+    res.json(await listApiTokens(getAuthenticatedUser(req).id))
+  } catch (error) {
+    next(error)
+  }
+})
+
+accountRouter.post('/tokens', requireSessionAuth, async (req, res, next) => {
+  try {
+    const name = typeof req.body?.name === 'string' ? req.body.name.trim() : ''
+    if (!name || name.length > 80) {
+      return res.status(400).json({ error: 'Give the token a name (at most 80 characters)' })
+    }
+    const scope = req.body?.scope === 'read' ? 'read' : req.body?.scope === 'write' ? 'write' : null
+    if (!scope) {
+      return res.status(400).json({ error: 'scope must be read or write' })
+    }
+    const days = req.body?.expiresInDays === null ? null : Number(req.body?.expiresInDays ?? 90)
+    if (days !== null && (!Number.isInteger(days) || days < 1 || days > 366)) {
+      return res.status(400).json({ error: 'expiresInDays must be between 1 and 366, or null for no expiry' })
+    }
+    const created = await createApiToken({
+      userId: getAuthenticatedUser(req).id,
+      name,
+      scope,
+      expiresAt: days === null ? null : Date.now() + days * 24 * 60 * 60 * 1000,
+    })
+    res.status(201).json(created)
+  } catch (error) {
+    next(error)
+  }
+})
+
+accountRouter.delete('/tokens/:tokenId', requireSessionAuth, async (req, res, next) => {
+  try {
+    const revoked = await revokeApiToken(getAuthenticatedUser(req).id, String(req.params.tokenId))
+    res.status(revoked ? 204 : 404).end()
+  } catch (error) {
+    next(error)
+  }
+})
 
 accountRouter.post('/verify-email/start', async (req, res, next) => {
   try {

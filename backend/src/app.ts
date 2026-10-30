@@ -5,6 +5,8 @@ import morgan from 'morgan'
 import { initializeAuth, requireAuth } from './auth.js'
 import { env } from './env.js'
 import { logger, shouldLog } from './logger.js'
+import { apiTokenAuth } from './middleware/apiTokenAuth.js'
+import { handleMcpRequest, rejectMcpMethod } from './mcp/server.js'
 import { authRouter } from './routes/auth.js'
 import { adminRouter } from './routes/admin.js'
 import { invitationsRouter } from './routes/invitations.js'
@@ -49,9 +51,17 @@ export async function createApp() {
   // Parser for Google RISC Security Event Tokens
   app.use(express.text({ type: 'application/secevent+jwt', limit: '1mb' }))
   await initializeAuth(app)
+  // After the session: a bearer token, when present, decides the user.
+  app.use('/api', apiTokenAuth)
 
   // CSRF protection for all state-mutating routes
   app.use('/api', csrfProtection)
+
+  // MCP endpoint for LLM agents (personal access token required).
+  const mcpRateLimit = createRateLimitMiddleware({ id: 'mcp', windowMs: 60_000, max: env.rateLimitMcpMax })
+  app.post('/api/mcp', mcpRateLimit, handleMcpRequest)
+  app.get('/api/mcp', rejectMcpMethod)
+  app.delete('/api/mcp', rejectMcpMethod)
 
   app.use('/api', opsRouter)
   app.use('/api/auth', authRateLimit, authRouter)

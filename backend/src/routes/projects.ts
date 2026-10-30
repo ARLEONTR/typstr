@@ -3742,6 +3742,45 @@ projectsRouter.post('/:projectId/files/:fileId/save', async (req, res, next) => 
   }
 })
 
+// Replace a text file's content from an API client (e.g. an LLM agent).
+// Unlike autosave, which the editor sends with its own copy of the text,
+// this also updates the live collaborative document, so editors that have
+// the file open show the change and do not write the old text back.
+projectsRouter.put('/:projectId/files/:fileId/content', async (req, res, next) => {
+  try {
+    const user = getAuthenticatedUser(req)
+    const file = await getProjectFileForUser(req.params.fileId, user.id)
+    if (!file || file.projectId !== req.params.projectId || file.mimeType === DRIVE_FOLDER_MIME_TYPE) {
+      return res.status(404).json({ error: 'File not found' })
+    }
+    if (!(await canAccessProject(file.projectId, user.id, 'editor'))) {
+      return res.status(403).json({ error: 'Editor access required' })
+    }
+    if (!file.mimeType.startsWith('text/') && !isProjectTextFilePath(file.path)) {
+      return res.status(400).json({ error: 'Only text files can be written this way' })
+    }
+    await assertFileWritable(file.id, user.id)
+
+    const content = typeof req.body?.content === 'string' ? req.body.content : null
+    if (content === null || content.length > 2_000_000) {
+      return res.status(400).json({ error: 'content must be a string of at most 2000000 characters' })
+    }
+
+    await replaceProjectFileText(file.id, content)
+    invalidateProjectWorkspaceFile(file.projectId, file.id)
+    await logProjectActivity({
+      projectId: file.projectId,
+      actorUserId: user.id,
+      type: 'file.update',
+      summary: `Updated ${file.path}${req.apiToken ? ' through the API' : ''}.`,
+      metadata: { fileId: file.id },
+    })
+    res.json({ saved: true, path: file.path, length: content.length })
+  } catch (error) {
+    next(error)
+  }
+})
+
 projectsRouter.post('/:projectId/files/:fileId/autosave', async (req, res, next) => {
   try {
     const user = getAuthenticatedUser(req)

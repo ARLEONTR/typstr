@@ -19,6 +19,13 @@ export function csrfProtection(req: Request, res: Response, next: NextFunction):
     return
   }
 
+  // Token-authenticated requests carry no cookies, so they cannot be forged
+  // cross-site (and browsers cannot add an Authorization header cross-origin).
+  if (req.apiToken) {
+    next()
+    return
+  }
+
   // Skip CSRF for machine-to-machine callbacks/webhooks.
   if (
     req.path === '/auth/google/risc' ||

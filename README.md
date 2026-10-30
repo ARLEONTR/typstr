@@ -37,6 +37,7 @@
 - [Architecture Overview](docs/architecture.md) — System components, runtime shape, and data flow.
 - [API & Database Schema](docs/api.md) — PostgreSQL schema and REST / WebSocket API reference.
 - [Features & Capabilities Guide](docs/features.md) — Detailed overview of editor, preview, and collaboration features.
+- [LLM agents (MCP)](docs/mcp.md) — Connect Claude, Cursor or VS Code to typstr with an access token.
 - [Contributing Guide](CONTRIBUTING.md) — Guidelines for setting up development and submitting pull requests.
 - [Security Policy](SECURITY.md) — Vulnerability disclosure process and security contact.
 - [Terms of Service](docs/terms-of-service.md) & [Privacy Policy](docs/privacy-policy.md) — Hosted platform legal documentation.
