@@ -1,7 +1,7 @@
 # Using typstr from LLM agents (MCP)
 
 typstr includes a [Model Context Protocol](https://modelcontextprotocol.io) server, so
-LLM agents such as Claude Code, Claude Desktop, Cursor or VS Code can work in typstr on
+LLM agents such as Claude Code, Claude Desktop, Codex, Gemini CLI, Cursor or VS Code can work in typstr on
 a user's behalf: read and edit files, compile and fix errors, export, handle review
 comments and create projects.
 
@@ -61,6 +61,34 @@ Claude Code:
 ```sh
 claude mcp add --transport http typstr https://<host>/api/mcp \
   --header "Authorization: Bearer <token>"
+```
+
+Codex (the token stays in an environment variable):
+
+```sh
+export TYPSTR_TOKEN="<token>"
+codex mcp add typstr --url https://<host>/api/mcp --bearer-token-env-var TYPSTR_TOKEN
+```
+
+or in `~/.codex/config.toml`:
+
+```toml
+[mcp_servers.typstr]
+url = "https://<host>/api/mcp"
+bearer_token_env_var = "TYPSTR_TOKEN"
+```
+
+Gemini CLI:
+
+```sh
+gemini mcp add --transport http typstr https://<host>/api/mcp \
+  --header "Authorization: Bearer <token>"
+```
+
+or in `~/.gemini/settings.json` (or `.gemini/settings.json` in a project):
+
+```json
+{ "mcpServers": { "typstr": { "httpUrl": "https://<host>/api/mcp", "headers": { "Authorization": "Bearer <token>" } } } }
 ```
 
 Cursor (`~/.cursor/mcp.json`):

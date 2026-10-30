@@ -12,11 +12,13 @@ interface ApiToken {
   expiresAt: number | null
 }
 
-type ClientId = 'claude-code' | 'claude-desktop' | 'cursor' | 'vscode' | 'other'
+type ClientId = 'claude-code' | 'claude-desktop' | 'codex' | 'gemini' | 'cursor' | 'vscode' | 'other'
 
 const CLIENTS: Array<{ id: ClientId; label: string }> = [
   { id: 'claude-code', label: 'Claude Code' },
   { id: 'claude-desktop', label: 'Claude Desktop' },
+  { id: 'codex', label: 'Codex' },
+  { id: 'gemini', label: 'Gemini CLI' },
   { id: 'cursor', label: 'Cursor' },
   { id: 'vscode', label: 'VS Code' },
   { id: 'other', label: 'Other clients' },
@@ -134,6 +136,21 @@ export default function AgentsPanel() {
         }, null, 2),
       },
     ],
+    codex: [
+      { label: 'Keep the token in an environment variable (e.g. in your shell profile)', value: `export TYPSTR_TOKEN="${token}"` },
+      { label: 'Then run in a terminal', value: `codex mcp add typstr --url ${endpoint} --bearer-token-env-var TYPSTR_TOKEN` },
+      {
+        label: 'Or add it to ~/.codex/config.toml yourself',
+        value: `[mcp_servers.typstr]\nurl = "${endpoint}"\nbearer_token_env_var = "TYPSTR_TOKEN"`,
+      },
+    ],
+    gemini: [
+      { label: 'Run in a terminal (add --scope user to use it in every directory)', value: `gemini mcp add --transport http typstr ${endpoint} \\\n  --header "Authorization: Bearer ${token}"` },
+      {
+        label: 'Or add it to ~/.gemini/settings.json (or .gemini/settings.json in a project)',
+        value: JSON.stringify({ mcpServers: { typstr: { httpUrl: endpoint, headers: { Authorization: `Bearer ${token}` } } } }, null, 2),
+      },
+    ],
     cursor: [
       {
         label: '~/.cursor/mcp.json (or .cursor/mcp.json in a project)',
@@ -162,7 +179,7 @@ export default function AgentsPanel() {
         <h3>Use typstr from an LLM agent</h3>
         <p>
           typstr has a <a href="https://modelcontextprotocol.io" target="_blank" rel="noreferrer">Model Context Protocol</a> (MCP)
-          server. Connect Claude, Cursor, VS Code or any MCP client to it and ask the agent to work on your documents: read and edit
+          server. Connect Claude, Codex, Gemini CLI, Cursor, VS Code or any MCP client to it and ask the agent to work on your documents: read and edit
           files, compile and fix errors, export, handle review comments and create projects. The agent acts as you, with exactly
           your project permissions.
         </p>
