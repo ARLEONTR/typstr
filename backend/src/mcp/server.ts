@@ -381,13 +381,12 @@ function buildServer(ctx: Context): McpServer {
 
   tool('typstr_compile', {
     title: 'Compile document',
-    description: 'Compile the project\'s main document (or another entry file) and report errors and warnings with file and line.',
-    inputSchema: { projectId: id, entryPath: projectPath.optional() },
-  }, async ({ projectId, entryPath }) => {
+    description: 'Compile the project\'s main document (with its included files) and report errors and warnings with file and line, and the page count.',
+    inputSchema: { projectId: id },
+  }, async ({ projectId }) => {
     const project = await loadProject(ctx, projectId)
-    const files = liveFiles(project)
-    const entry = entryPath ? files.find((file) => file.path === entryPath) : files.find((file) => file.id === project.mainFileId)
-    if (!entry) throw new ToolError(entryPath ? `No file "${entryPath}"` : 'The project has no main file; pass entryPath.')
+    const entry = liveFiles(project).find((file) => file.id === project.mainFileId)
+    if (!entry) throw new ToolError('The project has no main file; set one in the web interface.')
     const documentFormat = /\.(tex|ltx|latex)$/i.test(entry.path) ? 'latex' : 'typst'
     const source = await readText(ctx, projectId, entry)
     const result = await api(ctx, 'POST', '/api/compile', { source, projectId, fileId: entry.id, documentFormat, format: 'pdf' })
@@ -395,13 +394,9 @@ function buildServer(ctx: Context): McpServer {
     if (result.status >= 400) {
       return text({ ok: false, entry: entry.path, error: body.error ?? `HTTP ${result.status}`, diagnostics: body.diagnostics ?? [] })
     }
-    return text({
-      ok: true,
-      entry: entry.path,
-      pages: body.pageCount ?? body.pages?.length ?? null,
-      diagnostics: body.diagnostics ?? [],
-      engine: body.engine ?? undefined,
-    })
+    const pdf = typeof body.pdfBase64 === 'string' ? Buffer.from(body.pdfBase64, 'base64').toString('latin1') : ''
+    const pages = pdf ? (pdf.match(/\/Type\s*\/Page(?![a-z])/g) ?? []).length : null
+    return text({ ok: true, entry: entry.path, pages, diagnostics: body.diagnostics ?? [] })
   })
 
   tool('typstr_export', {
