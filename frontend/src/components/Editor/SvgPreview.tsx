@@ -2,13 +2,13 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent, ty
 import styles from './SvgPreview.module.css'
 import { sanitizePreviewSvg } from './svgSanitize'
 
-/** Parse the aspect ratio (height/width) from a typst SVG string. */
-function parseSvgAspectRatio(svg: string): number | null {
+/** Parse the page size (in points) from a typst SVG string. */
+function parseSvgPageSize(svg: string): { width: number; height: number } | null {
   const m = svg.match(/viewBox=["']0\s+0\s+([\d.]+)\s+([\d.]+)["']/)
   if (!m) return null
-  const w = parseFloat(m[1])
-  const h = parseFloat(m[2])
-  return w > 0 && h > 0 ? h / w : null
+  const width = parseFloat(m[1])
+  const height = parseFloat(m[2])
+  return width > 0 && height > 0 ? { width, height } : null
 }
 
 // Only pages this close to the visible one are put into the DOM; the rest
@@ -49,30 +49,36 @@ export default function SvgPreview({
 
   const safePages = useMemo(() => pages.map(sanitizePreviewSvg), [pages])
 
-  // Aspect ratio (height/width) from the first page SVG — assumed consistent across pages
-  const pageAspectRatio = useMemo(() => {
-    const first = pages[0]
-    return first ? parseSvgAspectRatio(first) : null
-  }, [pages])
+  // Aspect ratio (height/width) of every page: a document can mix portrait
+  // and landscape pages, and a landscape page in a portrait frame was shrunk
+  // to a strip in the middle of it.
+  const pageSizes = useMemo(() => pages.map(parseSvgPageSize), [pages])
+  const defaultPageSize = pageSizes.find((size) => size !== null) ?? null
+  const pageSizeOf = (localIdx: number) => pageSizes[localIdx] ?? defaultPageSize
+  const aspectRatioOf = (localIdx: number) => {
+    const size = pageSizeOf(localIdx)
+    return size ? size.height / size.width : null
+  }
 
-  // padding-top % is the most reliable cross-browser way to enforce aspect ratio
-  // with absolutely-positioned content inside a relatively-positioned container.
-  const framePaddingTop = pageAspectRatio ? `${pageAspectRatio * 100}%` : undefined
   const fitWidthPx = Math.max(320, viewportSize.width > 0 ? viewportSize.width - 16 : 880)
-  const fitPagePx = Math.max(
+  const fitPagePxFor = (aspectRatio: number | null) => Math.max(
     240,
     Math.min(
       fitWidthPx,
-      pageAspectRatio && viewportSize.height > 0 ? (viewportSize.height - 32) / pageAspectRatio : fitWidthPx * 0.78,
+      aspectRatio && viewportSize.height > 0 ? (viewportSize.height - 32) / aspectRatio : fitWidthPx * 0.78,
     ),
   )
-  const currentFitZoomPercent = Math.max(10, Math.min(500, Math.round((fitPagePx / fitWidthPx) * 100)))
+  const activeAspectRatio = aspectRatioOf(activePageIndex - pageOffset)
+  const currentFitZoomPercent = Math.max(10, Math.min(500, Math.round((fitPagePxFor(activeAspectRatio) / fitWidthPx) * 100)))
   const effectiveZoomPercent = fitMode === 'custom' ? zoomPercent : fitMode === 'page' ? currentFitZoomPercent : 100
-  const resolvedPageWidthPx = fitMode === 'custom'
-    ? Math.max(240, Math.min(2800, (fitWidthPx * zoomPercent) / 100))
-    : fitMode === 'page'
-      ? fitPagePx
-      : fitWidthPx
+  // A zoom level keeps one scale for all pages, so a landscape page is wider
+  // than a portrait one; the fit modes fit every page on its own.
+  const pageWidthPxFor = (localIdx: number) => {
+    if (fitMode === 'page') return fitPagePxFor(aspectRatioOf(localIdx))
+    if (fitMode !== 'custom') return fitWidthPx
+    const relativeWidth = (pageSizeOf(localIdx)?.width ?? 1) / (defaultPageSize?.width ?? 1)
+    return Math.max(240, Math.min(4000, (fitWidthPx * zoomPercent * relativeWidth) / 100))
+  }
 
   // Ref callbacks assign the page elements during commit; clearing the array
   // in an effect afterwards wiped them on every recompile, so the visible page
@@ -332,13 +338,14 @@ export default function SvgPreview({
         {pages.map((_, localIdx) => {
           const globalIdx = pageOffset + localIdx
           const isRendered = Math.abs(globalIdx - activePageIndex) <= PAGE_RENDER_RADIUS
+          const aspectRatio = aspectRatioOf(localIdx)
 
           return (
             <div
               key={globalIdx}
               ref={(el) => { pageRefsRef.current[localIdx] = el }}
               className={styles.page}
-              style={{ width: `${resolvedPageWidthPx}px`, maxWidth: 'none' }}
+              style={{ width: `${pageWidthPxFor(localIdx)}px`, maxWidth: 'none' }}
             >
               {/* Page number badge — appears on hover */}
               <div className={styles.pageLabel} aria-hidden>
@@ -352,7 +359,7 @@ export default function SvgPreview({
               */}
               <div
                 className={styles.previewFrame}
-                style={framePaddingTop ? { paddingTop: framePaddingTop } : { minHeight: '500px' }}
+                style={aspectRatio ? { paddingTop: `${aspectRatio * 100}%` } : { minHeight: '500px' }}
               >
                 <div className={styles.previewInner}>
                   <div
