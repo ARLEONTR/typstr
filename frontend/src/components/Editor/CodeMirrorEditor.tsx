@@ -2,13 +2,13 @@ import { useEffect, useRef, useState } from 'react'
 import { autocompletion, completionKeymap, type Completion, type CompletionContext } from '@codemirror/autocomplete'
 import { Decoration, EditorView, ViewPlugin, WidgetType, keymap, lineNumbers, highlightActiveLineGutter, type Command, type ViewUpdate, type DecorationSet } from '@codemirror/view'
 import { Compartment, EditorSelection, EditorState, RangeSetBuilder, StateEffect, StateField, Transaction } from '@codemirror/state'
-import { defaultKeymap, historyKeymap } from '@codemirror/commands'
+import { defaultKeymap } from '@codemirror/commands'
 import { HighlightStyle, codeFolding, foldGutter, foldKeymap, foldService, syntaxHighlighting, toggleFold } from '@codemirror/language'
 import { closeSearchPanel, openSearchPanel, search, searchKeymap } from '@codemirror/search'
 import { oneDark } from '@codemirror/theme-one-dark'
 import { tags } from '@lezer/highlight'
 import { typst } from 'codemirror-lang-typst'
-import { yCollab } from 'y-codemirror.next'
+import { yCollab, yUndoManagerKeymap } from 'y-codemirror.next'
 import * as Y from 'yjs'
 import type { Awareness } from 'y-protocols/awareness'
 import type { AiEditSuggestion, CommentSelectionAnchor, ProjectComment } from '../../types'
@@ -547,8 +547,10 @@ export default function CodeMirrorEditor({
           ...buildShortcutKeyBindings(shortcutBindings, 'leading', shortcutCommands),
           // Ctrl/Cmd+Enter always renders, whatever the render binding is.
           { key: 'Mod-Enter', run: () => { onCompileRef.current?.(); return true } },
+          // Undo history lives in the Y.UndoManager (only this user's edits);
+          // CodeMirror's historyKeymap did nothing without its history().
+          ...yUndoManagerKeymap,
           ...defaultKeymap,
-          ...historyKeymap,
           ...completionKeymap,
           ...searchKeymap,
           ...foldKeymap,
