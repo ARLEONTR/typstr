@@ -49,7 +49,7 @@ import { compileTypstProjectPdf, convertTypstProjectToDocx, convertWithPandoc, i
 import { ecosystemIssuesToCompileDiagnostics, validateProjectWorkspace } from './ecosystem.js'
 import { loadProjectWorkspace } from './projectWorkspace.js'
 import { pingSessionRedis } from '../auth.js'
-import { jobQueue, jobQueueEvents, createWorker } from './queueManager.js'
+import { jobQueue, jobQueueEvents, createWorker, cleanFinishedJobs } from './queueManager.js'
 import { assertCanStoreFileBytes, consumeCompileQuota } from './billing.js'
 
 const execFileAsync = promisify(execFile)
@@ -219,6 +219,7 @@ export function startBackgroundJobWorker(): void {
   worker = createWorker(async (job) => {
     return await executeJob(job.name as BackgroundJobType, job.data)
   }, 10)
+  void cleanFinishedJobs()
 }
 
 export async function enqueueBackgroundJob(
