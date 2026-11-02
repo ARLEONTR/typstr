@@ -941,6 +941,12 @@ async function executeCompileJob(payload: CompilePayload): Promise<CompileJobRes
   }
 }
 
+// Compiles with the same preview session name share one working directory,
+// and the name comes from the client: scope it to the user and project.
+function compileWorkspaceKey(payload: CompilePayload, previewSessionId: string | undefined): string | undefined {
+  return previewSessionId ? [payload.userId, payload.projectId ?? 'standalone', previewSessionId].join(':') : undefined
+}
+
 async function executeCompileJobWithSignal(payload: CompilePayload, compileSignal: AbortSignal | undefined): Promise<CompileJobResult> {
   if (payload.documentFormat === 'latex') {
     if (payload.format !== 'pdf') {
@@ -953,7 +959,7 @@ async function executeCompileJobWithSignal(payload: CompilePayload, compileSigna
         entryPath,
         files: [{ path: entryPath, content: payload.source }],
         engine: payload.latexEngine,
-      }, { signal: compileSignal, timeoutMs: payload.compileTimeoutMs, previewSessionId: payload.previewSessionId, projectId: payload.projectId })
+      }, { signal: compileSignal, timeoutMs: payload.compileTimeoutMs, previewSessionId: compileWorkspaceKey(payload, payload.previewSessionId), projectId: payload.projectId })
       const syncTexToken = syncTexRaw
         ? createSyncTexSession({ userId: payload.userId, entryPath, pdfBuffer: pdf, syncTexBuffer: syncTexRaw })
         : undefined
@@ -1013,7 +1019,7 @@ async function executeCompileJobWithSignal(payload: CompilePayload, compileSigna
       entryPath: workspace.entryPath,
       files: workspace.files,
       engine: payload.latexEngine,
-    }, { signal: compileSignal, timeoutMs: payload.compileTimeoutMs, previewSessionId: payload.previewSessionId, projectId: payload.projectId })
+    }, { signal: compileSignal, timeoutMs: payload.compileTimeoutMs, previewSessionId: compileWorkspaceKey(payload, payload.previewSessionId), projectId: payload.projectId })
 
     await logProjectActivity({
       projectId: activeFile.projectId,
@@ -1041,7 +1047,7 @@ async function executeCompileJobWithSignal(payload: CompilePayload, compileSigna
 
   if (!payload.projectId || !payload.fileId) {
     if (payload.format === 'pdf') {
-      const pdfBuffer = await compileTypstProjectToPdf({ entryPath: 'input.typ', files: [{ path: 'input.typ', content: payload.source }] }, { previewSessionId: payload.previewSessionId, signal: compileSignal, timeoutMs: payload.compileTimeoutMs })
+      const pdfBuffer = await compileTypstProjectToPdf({ entryPath: 'input.typ', files: [{ path: 'input.typ', content: payload.source }] }, { previewSessionId: compileWorkspaceKey(payload, payload.previewSessionId), signal: compileSignal, timeoutMs: payload.compileTimeoutMs })
       return { format: 'pdf', pdfBase64: pdfBuffer.toString('base64'), diagnostics: [] }
     }
 
@@ -1091,7 +1097,7 @@ async function executeCompileJobWithSignal(payload: CompilePayload, compileSigna
   })
   const settings = await getProjectEcosystemSettings(payload.projectId)
   const validationDiagnostics = ecosystemIssuesToCompileDiagnostics(validateProjectWorkspace({ files: workspace.files, settings }))
-  const previewSessionId = payload.previewSessionId ?? `${payload.projectId}:${entryFile.id}`
+  const previewSessionId = compileWorkspaceKey(payload, payload.previewSessionId ?? `${payload.projectId}:${entryFile.id}`)
   await logProjectActivity({
     projectId: activeFile.projectId,
     actorUserId: payload.userId,
@@ -1230,6 +1236,10 @@ async function executeExportJob(payload: ExportPayload): Promise<{ saved: true; 
     const file = await getProjectFileForUser(payload.fileId, payload.userId)
     if (!file || file.projectId !== payload.projectId) {
       throw new Error('File not found')
+    }
+    // Saving writes (or overwrites) a file in the project.
+    if (!(await canAccessProject(file.projectId, payload.userId, 'editor'))) {
+      throw Object.assign(new Error('Editor access required to save an export to the project'), { status: 403 })
     }
 
     const project = await getProjectById(file.projectId)

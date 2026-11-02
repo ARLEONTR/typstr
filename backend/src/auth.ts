@@ -166,8 +166,14 @@ export function requireAdmin(req: Request, res: Response, next: NextFunction): v
     return
   }
 
-  if (!isAdminUser(req.user)) {
+  if (!isAdminUser(req.user) || req.user.disabledAt) {
     res.status(403).json({ error: 'Admin access required' })
+    return
+  }
+
+  // A leaked agent token must not carry the account's admin rights.
+  if (req.apiToken) {
+    res.status(403).json({ error: 'Admin endpoints need a signed-in browser session, not an access token' })
     return
   }
 
@@ -187,7 +193,7 @@ export function isAdminRequestAuthorized(req: Request): boolean {
     return true
   }
 
-  return isAdminUser(req.user)
+  return !req.apiToken && !req.user?.disabledAt && isAdminUser(req.user)
 }
 
 function safeEqual(provided: string, expected: string): boolean {

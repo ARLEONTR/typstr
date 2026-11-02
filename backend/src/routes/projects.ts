@@ -3431,6 +3431,9 @@ projectsRouter.post('/:projectId/shares', async (req, res, next) => {
     if (!emailResult.valid || !role || !VALID_MEMBER_ROLES.includes(role)) {
       return res.status(400).json({ error: !emailResult.valid ? emailResult.error : 'email and a valid role are required' })
     }
+    if (role === 'manager' && projectRole === 'editor') {
+      return res.status(403).json({ error: 'Only owners and managers can invite managers' })
+    }
     if (role === 'manager') {
       await assertCanUseManagerRole(user.id)
     }
