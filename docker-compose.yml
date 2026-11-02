@@ -32,6 +32,9 @@ services:
       args:
         BACKEND_BASE_IMAGE: "${BACKEND_BASE_IMAGE:-typstr-backend-texbase:latest}"
     shm_size: "${BACKEND_SHM_SIZE:-4gb}"
+    # An init process reaps the TeX tools the sandbox helper leaves behind when a
+    # compile times out (node as PID 1 does not reap processes it did not start).
+    init: true
     environment:
       PORT: "3000"
       LOG_LEVEL: "${LOG_LEVEL:-ERROR}"
