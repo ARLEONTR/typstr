@@ -36,6 +36,8 @@ export async function createApp() {
   const compileRateLimit = createRateLimitMiddleware({ id: 'compile', windowMs: 60_000, max: env.rateLimitCompileMax })
   const exportRateLimit = createRateLimitMiddleware({ id: 'export', windowMs: 60_000, max: env.rateLimitExportMax })
   const uploadRateLimit = createRateLimitMiddleware({ id: 'upload', windowMs: 60_000, max: env.rateLimitUploadMax })
+  // Review links work without an account and can start compiles and previews.
+  const reviewRateLimit = createRateLimitMiddleware({ id: 'review', windowMs: 60_000, max: env.rateLimitCompileMax })
   const compileConcurrencyLimit = createConcurrencyLimitMiddleware({ id: 'Compile service', max: env.compileHttpConcurrencyMax })
   const exportConcurrencyLimit = createConcurrencyLimitMiddleware({ id: 'Export service', max: env.exportHttpConcurrencyMax })
 
@@ -65,7 +67,7 @@ export async function createApp() {
 
   app.use('/api', opsRouter)
   app.use('/api/auth', authRateLimit, authRouter)
-  app.use('/api/review', reviewRouter)
+  app.use('/api/review', (req, res, next) => (req.method === 'POST' ? reviewRateLimit(req, res, next) : next()), reviewRouter)
   app.use('/api/admin', adminRouter)
   app.use('/api/invitations', requireAuth, inviteRateLimit, invitationsRouter)
   app.use('/api/notifications', requireAuth, notificationsRouter)
