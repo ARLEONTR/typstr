@@ -51,7 +51,7 @@ export function normalizeZipPath(input: string): string | null {
   if (!normalized || normalized === '.' || normalized.split('/').some((segment) => segment === '..' || segment === '.')) {
     return null
   }
-  if (/[\u0000-\u001f]/.test(normalized)) {
+  if (/[\u0000-\u001f\u007f]/.test(normalized)) {
     return null
   }
   return normalized

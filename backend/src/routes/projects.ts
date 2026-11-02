@@ -1972,7 +1972,7 @@ projectsRouter.post('/:projectId/ecosystem/fonts', upload.single('file'), async 
       return res.status(404).json({ error: 'Project not found' })
     }
 
-    const fontPath = `${PROJECT_FONTS_FOLDER}/${req.file.originalname}`
+    const fontPath = joinProjectPath(PROJECT_FONTS_FOLDER, req.file.originalname)
     await upsertProjectBinaryFile(project, fontPath, req.file.mimetype || 'font/otf', req.file.buffer)
     invalidateProjectWorkspaceSubtree(project.id, PROJECT_FONTS_FOLDER)
 
@@ -3836,10 +3836,14 @@ function normalizeParentPath(input: string | null): string | null {
   return normalizeProjectPath(input)
 }
 
+// Control characters never belong in a file name; a newline would turn one
+// name into several entries for tools that read file lists line by line.
+const CONTROL_CHARACTERS = /[\u0000-\u001f\u007f]/
+
 function normalizeProjectPath(input: string): string {
   const normalized = path.posix.normalize(input.trim()).replace(/^\/+/, '')
-  if (!normalized || normalized === '.' || normalized.startsWith('..') || normalized.includes('../')) {
-    throw new Error('Invalid project path')
+  if (!normalized || normalized === '.' || normalized.startsWith('..') || normalized.includes('../') || CONTROL_CHARACTERS.test(normalized)) {
+    throw Object.assign(new Error('Invalid project path'), { status: 400 })
   }
 
   return normalized
@@ -3848,7 +3852,7 @@ function normalizeProjectPath(input: string): string {
 function joinProjectPath(parentPath: string | null, name: string): string {
   const normalizedName = name.trim()
   // "." and ".." would resolve to the parent directories on disk.
-  if (!normalizedName || normalizedName === '.' || normalizedName === '..' || /[/\\\0]/.test(normalizedName)) {
+  if (!normalizedName || normalizedName === '.' || normalizedName === '..' || /[/\\]/.test(normalizedName) || CONTROL_CHARACTERS.test(normalizedName)) {
     throw Object.assign(new Error('Invalid file or folder name'), { status: 400 })
   }
 

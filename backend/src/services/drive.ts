@@ -317,7 +317,7 @@ export async function listDriveProjectTree(userId: string, rootFolderId: string)
 export async function createDriveFolderInDrive(userId: string, parentId: string, name: string): Promise<string> {
   if (await shouldUseLocalFileStorage(userId)) {
     const parentInfo = await resolveLocalContainer(parentId)
-    const targetPath = path.join(parentInfo.rootPath, parentInfo.relativePath, name)
+    const targetPath = localChildPath(path.join(parentInfo.rootPath, parentInfo.relativePath), name)
     await mkdir(targetPath, { recursive: true })
     return targetPath
   }
@@ -330,7 +330,7 @@ export async function createDriveFolderInDrive(userId: string, parentId: string,
 export async function ensureChildFolderInDrive(userId: string, parentId: string, name: string): Promise<string> {
   if (await shouldUseLocalFileStorage(userId)) {
     const parentInfo = await resolveLocalContainer(parentId)
-    const targetPath = path.join(parentInfo.rootPath, parentInfo.relativePath, name)
+    const targetPath = localChildPath(path.join(parentInfo.rootPath, parentInfo.relativePath), name)
     await mkdir(targetPath, { recursive: true })
     return targetPath
   }
@@ -366,7 +366,7 @@ export async function renameDriveItem(userId: string, fileId: string, name: stri
         const uuidMatch = path.basename(fileId).match(/([0-9a-f-]{36})$/)
         const uuid = uuidMatch ? uuidMatch[1] : null
         const newBasename = uuid ? `project-${slugify(name)}-${uuid}` : `project-${slugify(name)}-${path.basename(fileId).split('-').pop()}`
-        const newFolderPath = path.join(path.dirname(fileId), newBasename)
+        const newFolderPath = localChildPath(path.dirname(fileId), newBasename)
         if (fileId !== newFolderPath) {
           await rename(fileId, newFolderPath)
           await updateProjectDriveFolderId(project.id, newFolderPath)
@@ -376,7 +376,7 @@ export async function renameDriveItem(userId: string, fileId: string, name: stri
     }
 
     const currentPath = path.join(item.projectDriveFolderId, item.path)
-    const targetPath = path.join(path.dirname(currentPath), name)
+    const targetPath = localChildPath(path.dirname(currentPath), name)
     await mkdir(path.dirname(targetPath), { recursive: true })
     if (currentPath !== targetPath) {
       await rename(currentPath, targetPath)
@@ -412,7 +412,7 @@ export async function moveDriveItem(input: {
     const targetName = input.name ?? item.name
     const currentPath = path.join(item.projectDriveFolderId, item.path)
     const sourcePath = await pathExists(currentPath) ? currentPath : input.fileId
-    const targetPath = path.join(destination.rootPath, destination.relativePath, targetName)
+    const targetPath = localChildPath(path.join(destination.rootPath, destination.relativePath), targetName)
     await mkdir(path.dirname(targetPath), { recursive: true })
     if (sourcePath !== targetPath) {
       await rename(sourcePath, targetPath)
@@ -466,7 +466,7 @@ export async function deleteDriveItem(userId: string, fileId: string): Promise<v
 export async function createGoogleDocInDrive(userId: string, parentId: string, name: string): Promise<string> {
   if (await shouldUseLocalFileStorage(userId)) {
     const parentInfo = await resolveLocalContainer(parentId)
-    const targetPath = path.join(parentInfo.rootPath, parentInfo.relativePath, `${name}.gdoc`)
+    const targetPath = localChildPath(path.join(parentInfo.rootPath, parentInfo.relativePath), `${name}.gdoc`)
     await mkdir(path.dirname(targetPath), { recursive: true })
     await writeFile(targetPath, JSON.stringify({ type: 'gdoc', name }), 'utf8')
     return targetPath
@@ -497,7 +497,7 @@ export async function createGoogleDocInDrive(userId: string, parentId: string, n
 export async function createTextFileInDrive(userId: string, parentId: string, name: string, content: string): Promise<string> {
   if (await shouldUseLocalFileStorage(userId)) {
     const parentInfo = await resolveLocalContainer(parentId)
-    const targetPath = path.join(parentInfo.rootPath, parentInfo.relativePath, name)
+    const targetPath = localChildPath(path.join(parentInfo.rootPath, parentInfo.relativePath), name)
     await mkdir(path.dirname(targetPath), { recursive: true })
     await writeFile(targetPath, content, 'utf8')
     return targetPath
@@ -521,7 +521,7 @@ export async function createBinaryFileInDrive(input: {
 }): Promise<string> {
   if (await shouldUseLocalFileStorage(input.userId)) {
     const parentInfo = await resolveLocalContainer(input.parentId)
-    const targetPath = path.join(parentInfo.rootPath, parentInfo.relativePath, input.name)
+    const targetPath = localChildPath(path.join(parentInfo.rootPath, parentInfo.relativePath), input.name)
     await mkdir(path.dirname(targetPath), { recursive: true })
     await writeFile(targetPath, input.content)
     // Uploading over an existing file reuses its path, which is the cache key.
@@ -580,7 +580,7 @@ export async function upsertBinaryFileInDrive(input: {
 }): Promise<string> {
   if (await shouldUseLocalFileStorage(input.userId)) {
     const parentInfo = await resolveLocalContainer(input.parentId)
-    const targetPath = path.join(parentInfo.rootPath, parentInfo.relativePath, input.name)
+    const targetPath = localChildPath(path.join(parentInfo.rootPath, parentInfo.relativePath), input.name)
     await mkdir(path.dirname(targetPath), { recursive: true })
     await writeFile(targetPath, input.content)
     return targetPath
@@ -710,6 +710,15 @@ function decodeCollaborationState(state: Uint8Array): string {
   const document = new Y.Doc()
   Y.applyUpdate(document, state)
   return document.getText('content').toString()
+}
+
+// File names come from uploads and requests; one must never name a path
+// outside its folder (or several lines, for tools reading file lists).
+function localChildPath(parentPath: string, name: string): string {
+  if (!name || name === '.' || name === '..' || /[/\\\u0000-\u001f\u007f]/.test(name)) {
+    throw Object.assign(new Error('Invalid file or folder name'), { status: 400 })
+  }
+  return assertWithinLocalStorageRoot(path.join(parentPath, name))
 }
 
 function assertWithinLocalStorageRoot(targetPath: string): string {
