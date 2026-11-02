@@ -10,6 +10,7 @@ import type { CompileDiagnostic } from '../types.js'
 import { fontPathsFromWorkspace } from './ecosystem.js'
 import { env } from '../env.js'
 import { logger } from '../logger.js'
+import { toolProcessEnv } from './toolEnv.js'
 
 
 const MAX_CONCURRENT = parseInt(process.env.MAX_CONCURRENT_COMPILES ?? '0') || Math.max(2, os.cpus().length)
@@ -388,7 +389,7 @@ export async function compileTypstProjectToSvg(input: {
       ['compile', inputFile, outputPattern, '--root', workDir, '--format', 'svg', ...fontPathArgs, ...cachePathArgs],
       {
         stdio: ['ignore', 'ignore', 'pipe'],
-        env: { ...process.env, NO_COLOR: '1' },
+        env: toolProcessEnv({ NO_COLOR: '1' }),
       }
     )
 
@@ -501,7 +502,7 @@ export async function compileTypstProjectToPdf(input: {
         ['compile', inputFile, outputFile, '--root', tmpDir, '--format', 'pdf', ...fontPathArgs, ...cachePathArgs],
         {
           stdio: ['ignore', 'ignore', 'pipe'],
-          env: { ...process.env, NO_COLOR: '1' },
+          env: toolProcessEnv({ NO_COLOR: '1' }),
         }
       )
 

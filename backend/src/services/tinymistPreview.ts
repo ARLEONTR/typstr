@@ -7,6 +7,7 @@ import type { Request, Response } from 'express'
 import { getProjectReviewRequestByToken } from '../db.js'
 import { env } from '../env.js'
 import type { ProjectWorkspace } from './projectWorkspace.js'
+import { toolProcessEnv } from './toolEnv.js'
 import { createMirroredWorkspace, resolveWorkspacePath, syncMirroredWorkspace } from './workspaceMirror.js'
 
 // Injected into every HTML page served by the tinymist proxy.
@@ -314,13 +315,10 @@ export async function ensureTypstPreviewSession(input: {
 }
 
 function buildTinymistChildEnv(): NodeJS.ProcessEnv {
-  const childEnv: NodeJS.ProcessEnv = {
-    ...process.env,
+  return toolProcessEnv({
     HOME: process.env.HOME ?? '/home/node',
     TYPST_FONT_PATHS: process.env.TYPST_FONT_PATHS ?? '/usr/share/fonts:/usr/local/share/fonts',
-  }
-  delete childEnv.PORT
-  return childEnv
+  })
 }
 
 export async function proxyTypstPreviewRequest(req: Request, res: Response, access: { projectId: string; owner: string }): Promise<void> {

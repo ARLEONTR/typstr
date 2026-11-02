@@ -4,6 +4,7 @@ import path from 'node:path'
 import { pathToFileURL } from 'node:url'
 import type { CompileDiagnostic } from '../types.js'
 import type { ProjectWorkspace } from './projectWorkspace.js'
+import { toolProcessEnv } from './toolEnv.js'
 import { createMirroredWorkspace, resolveWorkspacePath, syncMirroredWorkspace } from './workspaceMirror.js'
 
 type LspServerName = 'tinymist' | 'texlab'
@@ -114,10 +115,7 @@ class LspProcess {
         const proc = spawn(this.executable, this.args, {
           stdio: ['pipe', 'pipe', 'pipe'],
           cwd: process.env.COMPILE_TMPDIR ?? '/tmp',
-          env: {
-            ...process.env,
-            HOME: process.env.HOME ?? '/tmp',
-          },
+          env: toolProcessEnv({ HOME: process.env.HOME ?? '/tmp' }),
         })
         this.proc = proc
         this.buffer = ''

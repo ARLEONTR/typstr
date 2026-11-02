@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { randomBytes } from 'node:crypto'
 import { env } from '../env.js'
+import { toolProcessEnv } from './toolEnv.js'
 
 // A SyncTeX session keeps a per-compile working directory containing the PDF
 // and `.synctex.gz`, so we can query them with the `synctex` CLI on demand for
@@ -204,7 +205,7 @@ function spawnSyncTex(args: string[], cwd: string): Promise<string | null> {
     const proc = spawn('synctex', args, {
       cwd,
       stdio: ['ignore', 'pipe', 'pipe'],
-      env: { ...process.env, NO_COLOR: '1' },
+      env: toolProcessEnv({ NO_COLOR: '1' }),
     })
     const chunks: Buffer[] = []
     const errChunks: Buffer[] = []

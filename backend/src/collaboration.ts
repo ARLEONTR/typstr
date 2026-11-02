@@ -3,6 +3,7 @@ import { WebSocketServer } from 'ws'
 import { Hocuspocus } from '@hocuspocus/server'
 import { Database } from '@hocuspocus/extension-database'
 import { Redis } from '@hocuspocus/extension-redis'
+import { Redis as IORedis } from 'ioredis'
 import * as Y from 'yjs'
 import { canAccessProject, getProjectFileForUser, getProjectFileStorage, touchProjectFile, updateProjectFileCollaborationState } from './db.js'
 import { logger } from './logger.js'
@@ -124,8 +125,8 @@ export const hocuspocusServer = new Hocuspocus({
   },
   extensions: [
     new Redis({
-      host: new URL(env.collaborationRedisUrl).hostname,
-      port: Number(new URL(env.collaborationRedisUrl).port) || 6379,
+      // From the URL, so a password (and database index) in it are used too.
+      createClient: () => new IORedis(env.collaborationRedisUrl),
     }),
     new Database({
       fetch: async ({ documentName }) => {
