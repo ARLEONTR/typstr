@@ -1248,6 +1248,7 @@ projectsRouter.post('/:projectId/typst-preview-session', async (req, res, next) 
     const descriptor = await ensureTypstPreviewSession({
       projectId,
       sessionId,
+      owner: `user:${user.id}`,
       workspace,
     })
 
@@ -1267,7 +1268,7 @@ projectsRouter.all('/:projectId/tinymist-preview/:sessionId', async (req, res, n
     if (!(await canAccessProject(projectId, user.id, 'viewer'))) {
       return res.status(404).json({ error: 'Project not found' })
     }
-    await proxyTypstPreviewRequest(req, res)
+    await proxyTypstPreviewRequest(req, res, { projectId, owner: `user:${user.id}` })
   } catch (error) {
     next(error)
   }
@@ -1280,7 +1281,7 @@ projectsRouter.all('/:projectId/tinymist-preview/:sessionId/*path', async (req, 
     if (!(await canAccessProject(projectId, user.id, 'viewer'))) {
       return res.status(404).json({ error: 'Project not found' })
     }
-    await proxyTypstPreviewRequest(req, res)
+    await proxyTypstPreviewRequest(req, res, { projectId, owner: `user:${user.id}` })
   } catch (error) {
     next(error)
   }

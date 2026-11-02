@@ -1,9 +1,10 @@
 import { spawn } from 'node:child_process'
-import { createHash } from 'node:crypto'
+import { createHash, randomBytes } from 'node:crypto'
 import { existsSync, rmSync } from 'node:fs'
 import type { IncomingMessage } from 'node:http'
 import net from 'node:net'
 import type { Request, Response } from 'express'
+import { getProjectReviewRequestByToken } from '../db.js'
 import { env } from '../env.js'
 import type { ProjectWorkspace } from './projectWorkspace.js'
 import { createMirroredWorkspace, resolveWorkspacePath, syncMirroredWorkspace } from './workspaceMirror.js'
@@ -132,6 +133,9 @@ type LogListener = (line: string) => void
 type TypstPreviewSession = {
   sessionId: string
   baseSessionId: string
+  /** Who may use the session: `user:<id>` or `review:<review request id>`. */
+  owner: string
+  key: string
   projectId: string
   entryPath: string
   workspaceDir: string
@@ -147,17 +151,21 @@ type TypstPreviewSession = {
 }
 
 export const sessions = new Map<string, TypstPreviewSession>()
+// owner + project + the caller's session name -> random session id
+const sessionIdsByKey = new Map<string, string>()
 const SESSION_TTL_MS = 15 * 60 * 1000
+// Every session is a tinymist process; keep one caller from starting many.
+const MAX_SESSIONS_PER_OWNER = 3
+const MAX_SESSIONS = Number.parseInt(process.env.TINYMIST_PREVIEW_MAX_SESSIONS ?? '', 10) || 24
 const tinymistExecutable = process.env.TINYMIST_BIN ?? 'tinymist'
 
 export async function ensureTypstPreviewSession(input: {
   projectId: string
   sessionId: string
+  owner: string
   workspace: ProjectWorkspace
 }): Promise<TypstPreviewSessionDescriptor> {
-  console.log('[Tinymist Preview] Initializing session for project:', input.projectId, 'Session ID:', input.sessionId);
   cleanupExpiredSessions()
-  console.log('[Tinymist Preview] Existing sessions:', Array.from(sessions.keys()));
 
   if (!tinymistExecutable) {
     return {
@@ -173,16 +181,23 @@ export async function ensureTypstPreviewSession(input: {
 
   const nextWorkspaceHash = getWorkspaceHash(input.workspace)
 
-  const stableSessionId = input.sessionId
-  let session = sessions.get(stableSessionId)
+  // The caller's session name only picks among its own sessions; the id
+  // handed out is random, as the websocket upgrade carries nothing else.
+  const sessionKey = [input.owner, input.projectId, input.sessionId].join('\n')
+  const knownSessionId = sessionIdsByKey.get(sessionKey)
+  let session = knownSessionId ? sessions.get(knownSessionId) : undefined
   if (!session) {
+    makeRoomForSession(input.owner)
     try {
       const mirrored = createMirroredWorkspace(input.workspace, 'typstr-tinymist-preview-')
       const port = await allocatePort();
       const controlPort = await allocatePort();
+      const sessionId = randomBytes(24).toString('base64url')
       session = {
-        sessionId: stableSessionId,
+        sessionId,
         baseSessionId: input.sessionId,
+        owner: input.owner,
+        key: sessionKey,
         projectId: input.projectId,
         entryPath: input.workspace.entryPath,
         workspaceDir: mirrored.dir,
@@ -196,7 +211,8 @@ export async function ensureTypstPreviewSession(input: {
         lastTouchedAt: Date.now(),
         workspaceHash: nextWorkspaceHash,
       }
-      sessions.set(stableSessionId, session)
+      sessions.set(sessionId, session)
+      sessionIdsByKey.set(sessionKey, sessionId)
       syncMirroredWorkspace(session.workspaceDir, input.workspace.files)
     } catch (e) {
       console.error('[Tinymist Preview] Failed to init session:', e);
@@ -307,12 +323,10 @@ function buildTinymistChildEnv(): NodeJS.ProcessEnv {
   return childEnv
 }
 
-export async function proxyTypstPreviewRequest(req: Request, res: Response): Promise<void> {
+export async function proxyTypstPreviewRequest(req: Request, res: Response, access: { projectId: string; owner: string }): Promise<void> {
   const sessionId = Array.isArray(req.params.sessionId) ? req.params.sessionId[0] : req.params.sessionId
-  console.log('Proxying session ID:', sessionId, 'Available sessions:', [...sessions.keys()]);
-
   const session = sessions.get(sessionId)
-  if (!session) {
+  if (!session || session.projectId !== access.projectId || session.owner !== access.owner) {
     res.status(404).type('html').send(
       '<!doctype html><html><body><script>' +
       'window.parent.postMessage({type:"typstr:session-lost"},"*")' +
@@ -432,21 +446,20 @@ async function tryRecoverPreviewFetch(session: TypstPreviewSession, targetUrl: U
 }
 
 export async function proxyTypstPreviewWebSocket(req: IncomingMessage, socket: net.Socket, head: Buffer): Promise<void> {
-  console.log('[Tinymist Preview] Incoming request URL:', req.url);
-  const match = req.url?.match(/\/tinymist-preview\/([^/?]+)(\/control)?/)
+  const match = req.url?.match(/^\/api\/(?:projects\/([^/?]+)|review\/([^/?]+))\/tinymist-preview\/([^/?]+)(\/control)?/)
   if (!match) {
-    console.log('[Tinymist Preview] No match for URL:', req.url);
     sendUpgradeErrorResponse(socket, 404, 'Tinymist preview websocket route not found.')
     return
   }
 
-  const sessionId = decodeURIComponent(match[1]);
-  const session = sessions.get(sessionId);
-  if (!session) {
-    console.error(`[Tinymist Preview] No session found for sessionId: ${sessionId}. Available:`, Array.from(sessions.keys()));
+  // No session cookie is checked here: the random session id is the
+  // credential, and it must belong to the project or review link in the path.
+  const session = sessions.get(safeDecode(match[3]))
+  if (!session || !(await upgradeMatchesSession(session, match[1], match[2]))) {
     sendUpgradeErrorResponse(socket, 404, 'Tinymist preview session not found.')
     return
   }
+  const sessionId = session.sessionId
 
   // `session.ready` only flips true on the first successful boot; once tinymist
   // crashes or restarts, it stays false until ensureTypstPreviewSession is
@@ -454,7 +467,7 @@ export async function proxyTypstPreviewWebSocket(req: IncomingMessage, socket: n
   // tinymist hiccup would otherwise wedge the preview into permanent 503s.
   // Probe the target port directly — if it accepts connections, the session
   // is functionally ready, so refresh the flag and let the WS through.
-  const targetPort = Boolean(match[2]) ? session.controlPort : session.port
+  const targetPort = Boolean(match[4]) ? session.controlPort : session.port
   if (!session.ready) {
     const portAlive = await waitForServer(targetPort, 1_500)
     if (!portAlive) {
@@ -532,12 +545,42 @@ function forwardHeaders(req: Request): Headers {
 
 function cleanupExpiredSessions(): void {
   const cutoff = Date.now() - SESSION_TTL_MS
-  for (const [id, s] of sessions) {
+  for (const s of sessions.values()) {
     if (s.lastTouchedAt < cutoff) {
-      s.process?.kill('SIGTERM')
-      rmSync(s.workspaceDir, { recursive: true, force: true })
-      sessions.delete(id)
+      dropSession(s)
     }
+  }
+}
+
+function dropSession(s: TypstPreviewSession): void {
+  s.process?.kill('SIGTERM')
+  rmSync(s.workspaceDir, { recursive: true, force: true })
+  sessions.delete(s.sessionId)
+  if (sessionIdsByKey.get(s.key) === s.sessionId) sessionIdsByKey.delete(s.key)
+}
+
+// Before starting another tinymist: drop the owner's least recently used
+// session past its limit, and the oldest overall past the global one.
+function makeRoomForSession(owner: string): void {
+  const leastRecent = (list: TypstPreviewSession[]) => list.reduce((a, b) => (b.lastTouchedAt < a.lastTouchedAt ? b : a))
+  const owned = [...sessions.values()].filter((s) => s.owner === owner)
+  if (owned.length >= MAX_SESSIONS_PER_OWNER) dropSession(leastRecent(owned))
+  if (sessions.size >= MAX_SESSIONS) dropSession(leastRecent([...sessions.values()]))
+}
+
+async function upgradeMatchesSession(session: TypstPreviewSession, projectId: string | undefined, reviewToken: string | undefined): Promise<boolean> {
+  if (projectId !== undefined) {
+    return session.owner.startsWith('user:') && session.projectId === safeDecode(projectId)
+  }
+  const review = reviewToken ? await getProjectReviewRequestByToken(safeDecode(reviewToken)) : null
+  return Boolean(review && session.owner === `review:${review.id}` && session.projectId === review.project_id)
+}
+
+function safeDecode(value: string): string {
+  try {
+    return decodeURIComponent(value)
+  } catch {
+    return ''
   }
 }
 

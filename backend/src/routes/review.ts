@@ -155,6 +155,7 @@ reviewRouter.post('/:token/typst-preview-session', async (req, res, next) => {
     const descriptor = await ensureTypstPreviewSession({
       projectId: review.project_id,
       sessionId,
+      owner: `review:${review.id}`,
       workspace,
     })
     const compileResult = descriptor.ready
@@ -237,7 +238,7 @@ reviewRouter.all('/:token/tinymist-preview/:sessionId', async (req, res, next) =
   try {
     const review = await getProjectReviewRequestByToken(req.params.token)
     if (!review) return res.status(404).json({ error: 'Review link not found or expired.' })
-    await proxyTypstPreviewRequest(req, res)
+    await proxyTypstPreviewRequest(req, res, { projectId: review.project_id, owner: `review:${review.id}` })
   } catch (error) {
     next(error)
   }
@@ -247,7 +248,7 @@ reviewRouter.all('/:token/tinymist-preview/:sessionId/*path', async (req, res, n
   try {
     const review = await getProjectReviewRequestByToken(req.params.token)
     if (!review) return res.status(404).json({ error: 'Review link not found or expired.' })
-    await proxyTypstPreviewRequest(req, res)
+    await proxyTypstPreviewRequest(req, res, { projectId: review.project_id, owner: `review:${review.id}` })
   } catch (error) {
     next(error)
   }
