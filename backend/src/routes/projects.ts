@@ -801,9 +801,10 @@ projectsRouter.post('/:projectId/preview-html', async (req, res, next) => {
     })
 
     let html: string
-    let engine: 'make4ht' | 'pandoc' = preferredEngine ?? 'make4ht'
-    if (preferredEngine === 'pandoc') {
-      engine = 'pandoc'
+    // make4ht runs commands the document asks for (tex4ht's \Needs, a
+    // .make4ht file), so it is only used where every user is trusted.
+    let engine: 'make4ht' | 'pandoc' = env.latexMake4htPreview ? preferredEngine ?? 'make4ht' : 'pandoc'
+    if (engine === 'pandoc') {
       try {
         html = await convertLatexWorkspaceToHtmlWithPandoc({
           entryPath: entryFilePath,

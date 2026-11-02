@@ -63,6 +63,7 @@ services:
       REQUEST_BODY_LIMIT_MB: "${REQUEST_BODY_LIMIT_MB:-64}"
       UPLOAD_LIMIT_MB: "${UPLOAD_LIMIT_MB:-64}"
       ZIP_IMPORT_LIMIT_MB: "${ZIP_IMPORT_LIMIT_MB:-256}"
+      LATEX_MAKE4HT_PREVIEW: "${LATEX_MAKE4HT_PREVIEW:-false}"
       TINYMIST_BIN: "${TINYMIST_BIN:-/usr/local/bin/tinymist}"
       TEXLAB_BIN: "${TEXLAB_BIN:-/usr/local/bin/texlab}"
       ADMIN_EMAILS: "${ADMIN_EMAILS:-}"

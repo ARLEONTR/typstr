@@ -85,6 +85,9 @@ export const env = {
   zipImportLimitMb: getNumberEnv('ZIP_IMPORT_LIMIT_MB', 256),
 
   compileTmpdir: process.env.COMPILE_TMPDIR ?? '',
+  // make4ht (tex4ht) executes commands from the document, sandboxed only by
+  // user id; off unless all users are trusted.
+  latexMake4htPreview: getBooleanEnv('LATEX_MAKE4HT_PREVIEW', false),
   compilePdfOnSave: getBooleanEnv('COMPILE_PDF_ON_SAVE', false),
   retentionCompileJobsHours: getNumberEnv('RETENTION_COMPILE_JOBS_HOURS', 2),
   smtpHost: process.env.SMTP_HOST ?? '',
