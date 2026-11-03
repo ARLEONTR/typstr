@@ -5,7 +5,7 @@ import { promisify } from 'node:util'
 import { randomUUID, createHash } from 'node:crypto'
 import pLimit from 'p-limit'
 import * as Y from 'yjs'
-import { applySourceToCollaborationState } from '../collaboration.js'
+import { applySourceToCollaborationState, hocuspocusServer } from '../collaboration.js'
 import {
   canAccessProject,
   findUserById,
@@ -51,6 +51,9 @@ import { loadProjectWorkspace } from './projectWorkspace.js'
 import { pingSessionRedis } from '../auth.js'
 import { jobQueue, jobQueueEvents, createWorker, cleanFinishedJobs } from './queueManager.js'
 import { assertCanStoreFileBytes, consumeCompileQuota } from './billing.js'
+import { withKeyedLock } from './keyedLock.js'
+import { purgeExpiredTrash, replaceProjectFileText } from './projectFeatures.js'
+import { toolProcessEnv } from './toolEnv.js'
 
 const execFileAsync = promisify(execFile)
 const pool = getDbPool()
@@ -532,7 +535,11 @@ export async function restoreProjectRevision(input: { projectId: string; fileId:
     throw new Error('File not found')
   }
 
-  const currentSource = await readTextFileFromDrive(storage.ownerUserId, storage.file.driveFileId)
+  // While the file is open, the shared document is newer than the stored copy.
+  const liveDocument = hocuspocusServer.documents.get(input.fileId)
+  const currentSource = liveDocument
+    ? liveDocument.getText('content').toString()
+    : await readTextFileFromDrive(storage.ownerUserId, storage.file.driveFileId)
   await createProjectRevisionSnapshot({
     projectId: input.projectId,
     fileId: input.fileId,
@@ -543,10 +550,9 @@ export async function restoreProjectRevision(input: { projectId: string; fileId:
     label: `Pre-restore backup ${new Date().toLocaleString()}`,
   })
 
-  await writeTextFileToDrive(storage.ownerUserId, storage.file.driveFileId, revision.source)
-  const updatedState = applySourceToCollaborationState(storage.collaborationState, revision.source)
-  await updateProjectFileCollaborationState(input.fileId, updatedState)
-  await touchProjectFile(input.fileId)
+  // Through the shared document: open editors show the restored text, and
+  // their next change cannot store the old text over it.
+  await replaceProjectFileText(input.fileId, revision.source)
 
   const restoredRevision = await createProjectRevisionSnapshot({
     projectId: input.projectId,
@@ -837,7 +843,13 @@ async function executeJob(type: BackgroundJobType, payload: any): Promise<unknow
   }
 }
 
+// One save of a file at a time, in the order they were requested, so an older
+// copy can never be written after a newer one.
 async function executeSaveFileJob(payload: SaveFilePayload): Promise<{ saved: true }> {
+  return await withKeyedLock(`save-file:${payload.fileId}`, () => saveFile(payload))
+}
+
+async function saveFile(payload: SaveFilePayload): Promise<{ saved: true }> {
   const file = await getProjectFileForUser(payload.fileId, payload.userId)
   if (!file || file.projectId !== payload.projectId) {
     throw new Error('File not found')
@@ -856,10 +868,15 @@ async function executeSaveFileJob(payload: SaveFilePayload): Promise<{ saved: tr
 
   if (rows[0]?.last_content_hash !== hash) {
     await assertCanStoreFileBytes(payload.userId, file.projectId, file.id, Buffer.byteLength(payload.source, 'utf8'))
-    await writeTextFileToDrive(file.ownerUserId, file.driveFileId, payload.source)
-    const fileStorage = await getProjectFileStorage(file.id)
-    const updatedState = applySourceToCollaborationState(fileStorage?.collaborationState ?? null, payload.source)
-    await updateProjectFileCollaborationState(file.id, updatedState)
+    // While the file is open, the collaboration server stores the shared
+    // document, which already holds this editor's text. Writing the editor's
+    // copy as well could undo a collaborator's newer edit.
+    if (!hocuspocusServer.documents.has(file.id)) {
+      await writeTextFileToDrive(file.ownerUserId, file.driveFileId, payload.source)
+      const fileStorage = await getProjectFileStorage(file.id)
+      const updatedState = applySourceToCollaborationState(fileStorage?.collaborationState ?? null, payload.source)
+      await updateProjectFileCollaborationState(file.id, updatedState)
+    }
     await touchProjectFile(file.id)
 
     await pool.query(
@@ -1377,7 +1394,7 @@ export async function runRetentionPolicies(): Promise<RetentionReport> {
   const errorsCutoff = ranAt - env.retentionErrorsDays * 86_400_000
   const trashCutoff = ranAt - env.retentionTrashDays * 86_400_000
 
-  const [revisions, activity, errors, trash] = await Promise.all([
+  const [revisions, activity, errors] = await Promise.all([
     pool.query<{ count: string }>(`
       WITH keep AS (
         SELECT id FROM (
@@ -1395,18 +1412,17 @@ export async function runRetentionPolicies(): Promise<RetentionReport> {
     pool.query<{ count: string }>(`
       DELETE FROM error_events WHERE created_at < $1 RETURNING id
     `, [errorsCutoff]),
-    pool.query<{ count: string }>(`
-      DELETE FROM project_file_workflow
-      WHERE trashed_at IS NOT NULL AND trashed_at < $1 RETURNING file_id
-    `, [trashCutoff]),
   ])
+  // Deleting only the trash record would put the files back in the project
+  // tree (under Trash/), where they could no longer be restored or purged.
+  const trashedFilesDeleted = await purgeExpiredTrash(trashCutoff)
 
   return {
     revisionsDeleted: revisions.rowCount ?? 0,
     activityEventsDeleted: activity.rowCount ?? 0,
     completedJobsDeleted: 0,
     errorEventsDeleted: errors.rowCount ?? 0,
-    trashedFilesDeleted: trash.rowCount ?? 0,
+    trashedFilesDeleted,
     ranAt,
   }
 }
@@ -1456,13 +1472,17 @@ export async function runDatabaseBackup(): Promise<BackupReport> {
   const fileName = `typstr-${timestamp}.dump`
   const filePath = join(backupDir, fileName)
 
-  // pg_dump accepts a full connection URI via --dbname
+  // pg_dump accepts a full connection URI via --dbname. The password goes in
+  // its environment instead: any local user can read a command line.
+  const databaseUrl = new URL(env.databaseUrl)
+  const password = decodeURIComponent(databaseUrl.password)
+  databaseUrl.password = ''
   await execFileAsync('pg_dump', [
-    `--dbname=${env.databaseUrl}`,
+    `--dbname=${databaseUrl.toString()}`,
     '--format=custom',
     '--compress=9',
     `--file=${filePath}`,
-  ])
+  ], { env: toolProcessEnv(password ? { PGPASSWORD: password } : {}) })
 
   const { size: fileSizeBytes } = await stat(filePath)
 

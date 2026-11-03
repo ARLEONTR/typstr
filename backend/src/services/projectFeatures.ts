@@ -29,6 +29,7 @@ import {
   writeTextFileToDrive,
 } from './drive.js'
 import { chooseAutomaticMainFile } from './projectMainFile.js'
+import { replaceYText } from './yText.js'
 import { decodeProjectText, openProjectZip } from './zipImport.js'
 import type {
   ProjectActivityEvent,
@@ -1302,6 +1303,40 @@ export async function emptyProjectTrash(projectId: string): Promise<void> {
   }
 }
 
+/**
+ * Permanently deletes what was put in a project trash before `cutoff`, the
+ * same way emptying the trash does (a trashed folder takes its files with
+ * it). Returns how many trashed entries were deleted.
+ */
+export async function purgeExpiredTrash(cutoff: number): Promise<number> {
+  const { rows } = await getDbPool().query<{ project_id: string }>(
+    'SELECT DISTINCT project_id FROM project_file_workflow WHERE trashed_at IS NOT NULL AND trashed_at < $1',
+    [cutoff],
+  )
+
+  let purged = 0
+  for (const { project_id: projectId } of rows) {
+    const files = await listProjectFiles(projectId)
+    const workflows = new Map((await listProjectFileWorkflows(projectId)).map((entry) => [entry.fileId, entry] as const))
+    const expiredEntries = files.filter((file) => {
+      const trashedAt = workflows.get(file.id)?.trashedAt
+      return trashedAt != null && trashedAt < cutoff
+    })
+    const rootEntries = expiredEntries.filter((entry) => !expiredEntries.some((candidate) => candidate.id !== entry.id && entry.path.startsWith(`${candidate.path}/`)))
+
+    for (const entry of rootEntries) {
+      try {
+        await permanentlyDeleteProjectEntry(projectId, entry.id)
+        purged += 1
+      } catch (error) {
+        console.error('[retention] could not delete a trashed entry', { projectId, fileId: entry.id }, error)
+      }
+    }
+  }
+
+  return purged
+}
+
 export async function emptyOwnedProjectTrash(userId: string): Promise<number> {
   const dashboard = await listDashboardProjects(userId)
   const ownedProjects = dashboard.trashedProjects.filter((project) => project.role === 'owner')
@@ -1456,6 +1491,21 @@ export async function decideProjectReviewSuggestion(input: {
 }
 
 async function applySuggestionToFile(suggestion: ProjectReviewSuggestionRow) {
+  // While the file is open, change the shared document: open editors show the
+  // edit, and the stored copy (a few seconds older) would be overwritten by it.
+  const liveDocument = hocuspocusServer.documents.get(suggestion.file_id)
+  if (liveDocument) {
+    const text = liveDocument.getText('content')
+    const source = text.toString()
+    const from = lineColumnOffset(source, suggestion.start_line, suggestion.start_column)
+    const to = lineColumnOffset(source, suggestion.end_line, suggestion.end_column)
+    liveDocument.transact(() => {
+      text.delete(from, Math.max(0, to - from))
+      text.insert(from, suggestion.replacement_text)
+    }, 'suggestion')
+    return
+  }
+
   const storage = await getProjectFileStorage(suggestion.file_id)
   if (!storage) {
     throw new Error('File storage not found')
@@ -1465,11 +1515,7 @@ async function applySuggestionToFile(suggestion: ProjectReviewSuggestionRow) {
   const from = lineColumnOffset(source, suggestion.start_line, suggestion.start_column)
   const to = lineColumnOffset(source, suggestion.end_line, suggestion.end_column)
   const nextSource = `${source.slice(0, from)}${suggestion.replacement_text}${source.slice(to)}`
-
-  await writeTextFileToDrive(storage.ownerUserId, storage.file.driveFileId, nextSource)
-  const updatedState = applySourceToCollaborationState(storage.collaborationState, nextSource)
-  await updateProjectFileCollaborationState(storage.file.id, updatedState)
-  await touchProjectFile(storage.file.id)
+  await replaceProjectFileText(storage.file.id, nextSource)
 }
 
 /**
@@ -1483,10 +1529,7 @@ export async function replaceProjectFileText(fileId: string, content: string): P
   if (liveDocument) {
     const text = liveDocument.getText('content')
     if (text.toString() !== content) {
-      liveDocument.transact(() => {
-        text.delete(0, text.length)
-        text.insert(0, content)
-      }, 'upload')
+      liveDocument.transact(() => replaceYText(text, content), 'upload')
     }
   }
 

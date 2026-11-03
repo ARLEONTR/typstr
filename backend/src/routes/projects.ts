@@ -3650,6 +3650,7 @@ projectsRouter.post('/:projectId/files/:fileId/revisions/:revisionId/restore', a
     if (!(await canAccessProject(file.projectId, user.id, 'editor'))) {
       return res.status(403).json({ error: 'Editor access required' })
     }
+    await assertFileWritable(file.id, user.id)
     await assertCanAccessRevisionById(user.id, req.params.revisionId)
 
     const revision = await restoreProjectRevision({
@@ -3677,7 +3678,10 @@ projectsRouter.patch('/:projectId/files/:fileId/revisions/:revisionId/label', as
       return res.status(403).json({ error: 'Editor access required' })
     }
 
-    const label = typeof req.body.label === 'string' ? req.body.label.trim() || null : null
+    const label = typeof req.body.label === 'string' ? req.body.label.trim().slice(0, 180) : ''
+    if (!label) {
+      return res.status(400).json({ error: 'Label is required' })
+    }
     await updateProjectRevisionLabel(req.params.revisionId, file.id, label)
     res.json({ ok: true })
   } catch (error) {
@@ -3729,15 +3733,17 @@ projectsRouter.post('/:projectId/files/:fileId/save', async (req, res, next) => 
     }
     const label = typeof req.body.label === 'string' ? req.body.label.trim().slice(0, 180) : undefined
 
+    // No job id: BullMQ ignores a job whose id it still holds, and finished
+    // jobs are kept for a while, so a second save of the file was dropped.
+    const payload = { userId: user.id, projectId: file.projectId, fileId: file.id, source, label }
     const start = Date.now();
-    await enqueueBackgroundJob('save-file', {
-      userId: user.id,
-      projectId: file.projectId,
-      fileId: file.id,
-      source,
-      label,
-    }, { deduplicateKey: file.id })
-    
+    if (label) {
+      // A named checkpoint: answer once it is stored, so the history lists it.
+      await runBackgroundJobAndWait('save-file', payload, { maxAttempts: 1, timeoutMs: 30_000 })
+    } else {
+      await enqueueBackgroundJob('save-file', payload)
+    }
+
     console.log(`[Performance] Save enqueued in ${Date.now() - start}ms`);
     invalidateProjectWorkspaceFile(file.projectId, file.id)
 
