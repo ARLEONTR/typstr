@@ -1734,6 +1734,8 @@ export default function DocumentList() {
                               <input
                                 type="range" min="9" max="24" step="1"
                                 value={theme.uiFontSize}
+                                title="UI font size"
+                                aria-label="UI font size"
                                 onChange={(e) => updateTheme({ uiFontSize: Number(e.target.value) })}
                                 style={{ width: '100%', cursor: 'pointer' }}
                               />
@@ -1772,7 +1774,9 @@ export default function DocumentList() {
                               </div>
                               <input 
                                 type="range" min="9" max="24" step="1"
-                                value={theme.editorFontSize} 
+                                value={theme.editorFontSize}
+                                title="Editor font size"
+                                aria-label="Editor font size" 
                                 onChange={(e) => updateTheme({ editorFontSize: Number(e.target.value) })}
                                 style={{ width: '100%', cursor: 'pointer' }}
                               />

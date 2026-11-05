@@ -37,6 +37,7 @@ import {
 } from './icons'
 import { THEME_STORAGE_KEY, THEME_PRESETS, DEFAULT_THEME, normalizeWorkspaceTheme, resolveThemeVars, themeStorageKeyForUser } from './theme'
 import { safeStorage } from './safeStorage'
+import { HoverTooltips } from './components/Global/HoverTooltips'
 import type { BillingStatus, CommentSelectionAnchor, CompileDiagnostic, ProjectComment, ProjectRevision, TypstPreviewSessionResponse } from './types'
 
 const INACTIVITY_TIMEOUT_MS = 30 * 60 * 1_000
@@ -1511,6 +1512,7 @@ export default function App() {
       <BrowserRouter>
         <AppRoutes />
       </BrowserRouter>
+      <HoverTooltips />
     </AuthProvider>
   )
 }

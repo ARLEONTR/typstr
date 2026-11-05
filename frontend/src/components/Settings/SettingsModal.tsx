@@ -100,6 +100,8 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
                 <input
                   type="range" min="9" max="24" step="1"
                   value={theme.uiFontSize}
+                  title="UI font size"
+                  aria-label="UI font size"
                   onChange={(e) => updateTheme({ uiFontSize: Number(e.target.value) })}
                   style={{ width: '100%', cursor: 'pointer' }}
                 />
@@ -121,7 +123,9 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
                   </div>
                   <input 
                     type="range" min="9" max="24" step="1"
-                    value={theme.editorFontSize} 
+                    value={theme.editorFontSize}
+                    title="Editor font size"
+                    aria-label="Editor font size" 
                     onChange={(e) => updateTheme({ editorFontSize: Number(e.target.value) })}
                     style={{ width: '100%', cursor: 'pointer' }}
                   />

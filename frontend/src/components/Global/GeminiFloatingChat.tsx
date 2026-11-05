@@ -24,6 +24,8 @@ export function GeminiFloatingChat() {
           cursor: 'pointer',
           zIndex: 1000,
         }}
+        title="Open Gemini chat"
+        aria-label="Open Gemini chat"
       >
         AI
       </button>
@@ -43,12 +45,12 @@ export function GeminiFloatingChat() {
       display: 'flex',
       flexDirection: 'column',
       zIndex: 1000,
-      color: 'var(--on-accent)',
+      color: 'var(--text-strong)',
       border: '1px solid var(--panel-border)',
     }}>
       <div style={{ padding: '16px', display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid var(--panel-border)' }}>
         <strong>Gemini Chat</strong>
-        <button onClick={() => setIsChatOpen(false)} style={{ cursor: 'pointer', border: 'none', background: 'none', color: 'var(--on-accent)' }}>✕</button>
+        <button onClick={() => setIsChatOpen(false)} style={{ cursor: 'pointer', border: 'none', background: 'none', color: 'var(--text-soft)' }} title="Close chat" aria-label="Close chat">✕</button>
       </div>
       <div style={{ flex: 1, overflowY: 'auto', padding: '16px', fontSize: '13px' }}>
         {messages.map((m, i) => (
@@ -82,7 +84,7 @@ export function GeminiFloatingChat() {
             }
           }}
           placeholder="Ask Gemini anything..."
-          style={{ width: '100%', padding: '8px', background: 'var(--editor-bg)', border: '1px solid var(--panel-border)', borderRadius: '4px', color: 'var(--on-accent)' }}
+          style={{ width: '100%', padding: '8px', background: 'var(--editor-bg)', border: '1px solid var(--panel-border)', borderRadius: '4px', color: 'var(--text-bright)' }}
         />
       </div>
     </div>

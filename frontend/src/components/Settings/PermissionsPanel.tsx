@@ -213,7 +213,7 @@ export function PermissionsPanel() {
     return (
       <div style={{ padding: '20px', textAlign: 'center' }}>
         <p style={{ color: 'var(--danger)', marginBottom: '12px' }}>{error}</p>
-        <button onClick={load} style={{ padding: '8px 16px', background: 'var(--action-bg)', color: 'var(--on-accent)', border: 'none', borderRadius: '6px', cursor: 'pointer' }}>Retry</button>
+        <button onClick={load} style={{ padding: '8px 16px', background: 'var(--action-bg)', color: 'var(--accent)', border: 'none', borderRadius: '6px', cursor: 'pointer' }}>Retry</button>
       </div>
     )
   }
@@ -519,7 +519,7 @@ export function PermissionsPanel() {
                 <button
                   onClick={() => setShowConfirm(false)}
                   disabled={revoking}
-                  style={{ padding: '8px 16px', background: 'var(--action-bg)', color: 'var(--on-accent)', border: 'none', borderRadius: '6px', cursor: 'pointer', fontSize: '14px' }}
+                  style={{ padding: '8px 16px', background: 'var(--action-bg)', color: 'var(--accent)', border: 'none', borderRadius: '6px', cursor: 'pointer', fontSize: '14px' }}
                 >
                   Cancel
                 </button>

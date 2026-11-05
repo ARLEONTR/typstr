@@ -8014,11 +8014,11 @@ function RevisionHistoryPanel({
       <section className={styles.themeSection}>
         <h3>Compare Snapshots</h3>
         <div className={styles.inlineFieldRow}>
-          <select className={styles.themeSelect} value={compareLeftId} onChange={(event) => setCompareLeftId(event.target.value)}>
+          <select className={styles.themeSelect} value={compareLeftId} onChange={(event) => setCompareLeftId(event.target.value)} title="Older snapshot to compare" aria-label="Older snapshot to compare">
             <option value="">Older snapshot</option>
             {revisions.map((revision) => <option key={revision.id} value={revision.id}>{revision.label}</option>)}
           </select>
-          <select className={styles.themeSelect} value={compareRightId} onChange={(event) => setCompareRightId(event.target.value)}>
+          <select className={styles.themeSelect} value={compareRightId} onChange={(event) => setCompareRightId(event.target.value)} title="Newer snapshot to compare" aria-label="Newer snapshot to compare">
             <option value="">Newer snapshot</option>
             {revisions.map((revision) => <option key={revision.id} value={revision.id}>{revision.label}</option>)}
           </select>

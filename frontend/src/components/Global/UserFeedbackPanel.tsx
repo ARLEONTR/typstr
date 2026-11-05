@@ -70,7 +70,7 @@ export function UserFeedbackPanel({ onClose, embedded }: { onClose?: () => void;
       padding: '20px',
       borderRadius: '8px',
       zIndex: 1000,
-      color: 'var(--on-accent)',
+      color: 'var(--text-strong)',
       border: '1px solid var(--panel-border)',
     }
 
@@ -140,7 +140,7 @@ export function UserFeedbackPanel({ onClose, embedded }: { onClose?: () => void;
                   onChange={(event) => setReplyDrafts((current) => ({ ...current, [root.id]: event.target.value }))}
                   placeholder="Add follow-up to this feedback..."
                   rows={2}
-                  style={{ width: '100%', background: 'var(--editor-bg)', border: '1px solid var(--panel-border)', borderRadius: '6px', color: 'var(--on-accent)', padding: '8px' }}
+                  style={{ width: '100%', background: 'var(--editor-bg)', border: '1px solid var(--panel-border)', borderRadius: '6px', color: 'var(--text-bright)', padding: '8px', font: 'inherit', fontSize: '13px' }}
                 />
                 <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 8 }}>
                   <button

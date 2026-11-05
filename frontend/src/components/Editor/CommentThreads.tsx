@@ -441,6 +441,8 @@ function ThreadCard({
             type="button"
             className={comment.status === 'resolved' ? styles.actionBtn : styles.actionBtnPrimary}
             onClick={() => onToggleResolved(comment, comment.status !== 'resolved')}
+            title={comment.status === 'resolved' ? 'Reopen thread' : 'Resolve thread'}
+            aria-label={comment.status === 'resolved' ? 'Reopen thread' : 'Resolve thread'}
           >
             {comment.status === 'resolved' ? <RefreshCw size={14} aria-hidden /> : <CheckIcon size={14} aria-hidden />}
             {comment.status === 'resolved' ? 'Reopen' : 'Resolve'}
