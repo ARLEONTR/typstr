@@ -12,6 +12,7 @@ dist
 dist-ssr
 *.local
 public/core/busytex
+public/assets/typst-fonts
 
 # Editor directories and files
 .vscode/*

@@ -9,6 +9,7 @@ import liberationSansBoldItalicUrl from 'pdfjs-dist/standard_fonts/LiberationSan
 import { apiClient } from './api/client'
 import { isFatalTypstWasmError } from './typstWasmErrors'
 import { splitTypstSvgIntoPages } from './typstSvgPages'
+import { looksLikeFontFile, typstFontSources } from './typstFontAssets'
 
 type ProjectFileEntry = { path: string; content: string | Uint8Array }
 type PackageSpec = { namespace: string; name: string; version: string }
@@ -62,29 +63,6 @@ const BUNDLED_FONT_URLS = [
   liberationSansItalicUrl,
   liberationSansBoldItalicUrl,
 ]
-
-function buildTypstTextFontUrls(): string[] {
-  const baseUrl = 'https://cdn.jsdelivr.net/gh/typst/typst-assets@v0.13.1/files/fonts'
-  return [
-    'DejaVuSansMono-Bold.ttf',
-    'DejaVuSansMono-BoldOblique.ttf',
-    'DejaVuSansMono-Oblique.ttf',
-    'DejaVuSansMono.ttf',
-    'LibertinusSerif-Bold.otf',
-    'LibertinusSerif-BoldItalic.otf',
-    'LibertinusSerif-Italic.otf',
-    'LibertinusSerif-Regular.otf',
-    'LibertinusSerif-Semibold.otf',
-    'LibertinusSerif-SemiboldItalic.otf',
-    'NewCM10-Bold.otf',
-    'NewCM10-BoldItalic.otf',
-    'NewCM10-Italic.otf',
-    'NewCM10-Regular.otf',
-    'NewCMMath-Bold.otf',
-    'NewCMMath-Book.otf',
-    'NewCMMath-Regular.otf',
-  ].map((fileName) => `${baseUrl}/${fileName}`)
-}
 
 async function ensureInitialized() {
   if (isInitialized) return
@@ -169,12 +147,12 @@ async function loadDefaultFonts(builder: TypstCompilerBuilder): Promise<void> {
     }
   }
 
-  // 2. Best-effort load additional typography fonts from CDN with a short timeout
-  const cdnUrls = buildTypstTextFontUrls()
-  const cdnBuffers = await Promise.allSettled(
-    cdnUrls.map((url) => fetchFontBytes(url, 2000)),
+  // 2. Best-effort load typst's own text and math fonts: from typstr itself,
+  // else from the CDN, each with a short timeout
+  const fontBuffers = await Promise.allSettled(
+    typstFontSources().map(({ local, cdn }) => fetchFontBytes(local, 2000).catch(() => fetchFontBytes(cdn, 2000))),
   )
-  for (const result of cdnBuffers) {
+  for (const result of fontBuffers) {
     if (result.status === 'fulfilled') {
       await builder.add_raw_font(result.value)
       loadedCount++
@@ -194,7 +172,11 @@ async function fetchFontBytes(url: string, timeoutMs = DEFAULT_FONT_FETCH_TIMEOU
     if (!response.ok) {
       throw new Error(`Failed to load Typst WebAssembly font asset: ${url}`)
     }
-    return new Uint8Array(await response.arrayBuffer())
+    const bytes = new Uint8Array(await response.arrayBuffer())
+    if (!looksLikeFontFile(bytes)) {
+      throw new Error(`Typst WebAssembly font asset is not a font: ${url}`)
+    }
+    return bytes
   } finally {
     clearTimeout(timeout)
   }

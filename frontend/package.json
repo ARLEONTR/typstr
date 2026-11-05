@@ -11,6 +11,7 @@
     "build": "tsc -b && vite build && node scripts/safari-compat.mjs",
     "preview": "vite preview",
     "download:busytex-assets": "texlyre-busytex download-assets ./public/core",
+    "download:typst-fonts": "node scripts/download-typst-fonts.mjs",
     "postinstall": "patch-package"
   },
   "dependencies": {

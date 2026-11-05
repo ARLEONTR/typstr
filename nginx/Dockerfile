@@ -6,6 +6,7 @@ RUN npm ci
 
 COPY frontend/ ./
 RUN npm run download:busytex-assets
+RUN npm run download:typst-fonts
 RUN npm run build
 
 FROM nginx:1.27-alpine
