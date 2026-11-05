@@ -159,6 +159,13 @@
   overflow: hidden;
 }
 
+/* A rendered page holds thousands of SVG nodes (one <use> per glyph). On its
+   own compositor layer it is not re-layerized on every frame, which cost
+   ~150 ms per keystroke anywhere in the editor (comment box included). */
+.previewInnerLive {
+  will-change: transform;
+}
+
 .previewSvg {
   position: absolute;
   inset: 0;

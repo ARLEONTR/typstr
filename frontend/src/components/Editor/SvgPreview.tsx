@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent, type KeyboardEvent, type MouseEvent as ReactMouseEvent } from 'react'
+import { memo, useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent, type KeyboardEvent, type MouseEvent as ReactMouseEvent } from 'react'
 import styles from './SvgPreview.module.css'
 import { sanitizePreviewSvg } from './svgSanitize'
 
@@ -16,12 +16,41 @@ function parseSvgPageSize(svg: string): { width: number; height: number } | null
 // tens of thousands of SVG nodes (hundreds of MB) for pages nobody sees.
 const PAGE_RENDER_RADIUS = 2
 
+type PageMarkup = { __html: string }
+const EMPTY_MARKUP: PageMarkup = { __html: '' }
+
+// One page's SVG, sanitized only once the page is put into the DOM:
+// sanitizing every page after each compile blocked typing for seconds in long
+// documents. The markup object stays the same while the page's SVG is
+// unchanged, across compiles too. React 19 sets innerHTML again whenever the
+// dangerouslySetInnerHTML object is a new one, even with the same HTML, so
+// any re-render of the editor (a keystroke in the comment box) re-parsed the
+// visible pages, ~20,000 SVG nodes, and recalculated the style of the page.
+const PreviewPageContent = memo(function PreviewPageContent({ svg, page, onPageClick }: {
+  svg: string | null
+  page: number
+  onPageClick: (event: ReactMouseEvent<HTMLDivElement>, page: number) => void
+}) {
+  const markup = useMemo(() => (svg ? { __html: sanitizePreviewSvg(svg) } : EMPTY_MARKUP), [svg])
+  return (
+    <div className={svg ? `${styles.previewInner} ${styles.previewInnerLive}` : styles.previewInner}>
+      <div
+        className={styles.previewSvg}
+        onClick={(event) => onPageClick(event, page)}
+        dangerouslySetInnerHTML={markup}
+      />
+    </div>
+  )
+})
+
 interface Props {
   pages: string[]
   pageCount: number
   pageOffset: number
   compileError: string | null
   isCompiling: boolean
+  /** How long the last compile took, shown in the toolbar. */
+  compileMs?: number | null
   /** `page` is the index in `pages`, `run` the text run on it, `offset` the clicked character. */
   onTextClick?: (input: { page: number; run: number; text: string; offset: number }) => void
   /** Scroll to and highlight a text run (`page` is the index in `pages`). */
@@ -34,6 +63,7 @@ export default function SvgPreview({
   pageOffset,
   compileError,
   isCompiling,
+  compileMs,
   onTextClick,
   reveal,
 }: Props) {
@@ -46,8 +76,6 @@ export default function SvgPreview({
   const [viewportSize, setViewportSize] = useState({ width: 0, height: 0 })
 
   const totalPageCount = Math.max(1, pageCount || pages.length)
-
-  const safePages = useMemo(() => pages.map(sanitizePreviewSvg), [pages])
 
   // Aspect ratio (height/width) of every page: a document can mix portrait
   // and landscape pages, and a landscape page in a portrait frame was shrunk
@@ -273,7 +301,7 @@ export default function SvgPreview({
     target.classList.add(styles.syncFlash)
     window.setTimeout(() => target.classList.remove(styles.syncFlash), 1600)
     setHighlight(null)
-  }, [highlight, safePages, activePageIndex, pageOffset, scrollToPage])
+  }, [highlight, pages, activePageIndex, pageOffset, scrollToPage])
 
   if (compileError && pages.length === 0) {
     return (
@@ -333,12 +361,19 @@ export default function SvgPreview({
           <span className={styles.toolbarMeta}>/ {totalPageCount}</span>
           <button type="button" className={styles.toolbarBtn} onClick={() => scrollToPage(activePageIndex + 1, 'smooth')}>Next</button>
         </div>
+        {compileMs != null && compileMs > 0 ? (
+          <div className={styles.toolbarGroup}>
+            <span className={styles.toolbarMeta} title="Time the last preview compile took">
+              {compileMs < 1000 ? `${compileMs} ms` : `${(compileMs / 1000).toFixed(1)} s`}
+            </span>
+          </div>
+        ) : null}
       </div>
       <div className={styles.pageViewport} ref={pageViewportRef}>
-        {pages.map((_, localIdx) => {
+        {pages.map((page, localIdx) => {
           const globalIdx = pageOffset + localIdx
-          const isRendered = Math.abs(globalIdx - activePageIndex) <= PAGE_RENDER_RADIUS
           const aspectRatio = aspectRatioOf(localIdx)
+          const isRendered = Math.abs(globalIdx - activePageIndex) <= PAGE_RENDER_RADIUS
 
           return (
             <div
@@ -361,13 +396,11 @@ export default function SvgPreview({
                 className={styles.previewFrame}
                 style={aspectRatio ? { paddingTop: `${aspectRatio * 100}%` } : { minHeight: '500px' }}
               >
-                <div className={styles.previewInner}>
-                  <div
-                    className={styles.previewSvg}
-                    onClick={(event) => handlePreviewClick(event, globalIdx + 1)}
-                    dangerouslySetInnerHTML={{ __html: isRendered ? safePages[localIdx] ?? '' : '' }}
-                  />
-                </div>
+                <PreviewPageContent
+                  svg={isRendered ? page : null}
+                  page={globalIdx + 1}
+                  onPageClick={handlePreviewClick}
+                />
               </div>
             </div>
           )

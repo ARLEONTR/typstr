@@ -22,6 +22,12 @@ export type TypstWasmSvgResult = {
   pages: string[]
   pageCount: number
   pageOffset: number
+  /**
+   * Time spent compiling and turning the result into SVG pages (splitMs of
+   * renderMs: splitting it into pages). `cold` marks the compiler's first
+   * compile, which has nothing cached yet and is many times slower.
+   */
+  timings?: { compileMs: number; renderMs: number; splitMs?: number; cold?: boolean }
 }
 
 export type TypstWasmPdfResult = {
@@ -36,6 +42,7 @@ type CompilerWithPackageState = {
   _resolvedPackageAliases?: Map<string, string>
   _virtualFiles?: Map<string, Uint8Array>
   _workspaceFilePaths?: Set<string>
+  _hasCompiled?: boolean
 }
 
 type TypstCompiler = Awaited<ReturnType<TypstCompilerBuilder['build']>> & CompilerWithPackageState
@@ -221,15 +228,25 @@ export async function compileTypstWasm(
       const workspaceFiles = syncWorkspaceFiles(compiler, source, entryPath, files, virtualFiles, workspaceFilePaths)
       await preloadPackageBundles(compiler, workspaceFiles, packageBundleCache, mappedPackageRoots, resolvedPackageRoots, resolvedPackageAliases, virtualFiles)
 
+      const cold = !compiler._hasCompiled
+      const compileStartedAt = performance.now()
       const rawResult = await compiler.compile(entryPath, [], 'vector', 0)
+      compiler._hasCompiled = true
       const vectorArtifact = normalizeVectorArtifact(rawResult)
-      const pages = await renderVectorArtifactToSvgPages(vectorArtifact)
+      const renderStartedAt = performance.now()
+      const { pages, splitMs } = await renderVectorArtifactToSvgPages(vectorArtifact)
 
       return {
         format: 'svg',
         pages,
         pageCount: pages.length,
         pageOffset: 0,
+        timings: {
+          compileMs: Math.round(renderStartedAt - compileStartedAt),
+          renderMs: Math.round(performance.now() - renderStartedAt),
+          splitMs,
+          cold,
+        },
       }
     } catch (error) {
       if (isFatalTypstWasmError(error)) {
@@ -648,7 +665,7 @@ function normalizePdfArtifact(result: unknown): Uint8Array {
   throw new Error('Typst WebAssembly compiler did not return a PDF artifact.')
 }
 
-async function renderVectorArtifactToSvgPages(artifactContent: Uint8Array): Promise<string[]> {
+async function renderVectorArtifactToSvgPages(artifactContent: Uint8Array): Promise<{ pages: string[]; splitMs: number }> {
   const activeRenderer = renderer
   if (!activeRenderer) {
     throw new Error('Typst SVG renderer is not initialized.')
@@ -660,7 +677,7 @@ async function renderVectorArtifactToSvgPages(artifactContent: Uint8Array): Prom
 
   try {
     if (session.retrievePagesInfo().length === 0) {
-      return []
+      return { pages: [], splitMs: 0 }
     }
 
     // renderSvg always renders the whole document (it ignores `window`), so
@@ -671,7 +688,9 @@ async function renderVectorArtifactToSvgPages(artifactContent: Uint8Array): Prom
       data_selection: { body: true, defs: true, css: true, js: false },
     })
 
-    return normalizeSvgPages(splitTypstSvgIntoPages(svg))
+    const splitStartedAt = performance.now()
+    const pages = normalizeSvgPages(splitTypstSvgIntoPages(svg))
+    return { pages, splitMs: Math.round(performance.now() - splitStartedAt) }
   } finally {
     ;(session as RenderSession & { [Symbol.dispose]?: () => void; free?: () => void }).free?.()
   }

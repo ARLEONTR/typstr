@@ -7,6 +7,7 @@ import { useAuth } from '../../hooks/useAuth'
 import { safeStorage } from '../../safeStorage'
 import { useCollaboration } from '../../hooks/useCollaboration'
 import { ENABLE_LATEX_SERVER_FALLBACK, ENABLE_LATEX_WASM_PDF, useCompile } from '../../hooks/useCompile'
+import { typstAutoCompileDelayFor } from '../../hooks/compileDelay'
 import { useExport } from '../../hooks/useExport'
 import type { ExportLogEntry } from '../../hooks/useExport'
 import { useGemini } from '../../hooks/useGemini'
@@ -569,9 +570,17 @@ function ProjectWorkspace({
     latexSyncTex,
     latexSyncTexToken,
     latexSyncTexEntryPath,
+    lastCompileMs,
     compileNow,
     resetCompile,
   } = useCompile({})
+  // Live Typst preview waits for a pause in typing that grows with how long
+  // the document takes to compile: a short document still follows every
+  // keystroke, a long one is compiled when the writer stops for a moment
+  // instead of over and over while they type.
+  const typstAutoCompileDelayMs = typstAutoCompileDelayFor(lastCompileMs)
+  const typstAutoCompileDelayRef = useRef(typstAutoCompileDelayMs)
+  typstAutoCompileDelayRef.current = typstAutoCompileDelayMs
   const { isExporting, exportLogs, clearExportLogs, exportDocument, saveExportToDrive, downloadProjectZip } = useExport()
   const collaborativeSaveStatus = useSaveStatus(ytext)
   const gemini = useGemini()
@@ -2402,7 +2411,6 @@ function ProjectWorkspace({
     compileNow(compileTargetSource, compileContextWithActiveSource(activeSource))
   }, [activeLatexCompiler, activeSource, canRender, compileContextWithActiveSource, compileNow, compileTargetFile.id, compileTargetSource, previewMode, shouldUseTinymistWebPreview])
 
-  const TYPST_AUTO_COMPILE_DEBOUNCE_MS = 16
   const LATEX_AUTO_COMPILE_DEBOUNCE_MS = 2000
 
   useEffect(() => {
@@ -2411,7 +2419,7 @@ function ProjectWorkspace({
     if (!compileTargetSource.trim()) return
     const id = window.setTimeout(() => {
       setTinymistSyncSource((current) => current === compileTargetSource ? current : compileTargetSource)
-    }, TYPST_AUTO_COMPILE_DEBOUNCE_MS)
+    }, typstAutoCompileDelayRef.current)
     return () => window.clearTimeout(id)
   }, [activeIsRenderableTypstFile, compileTargetSource, previewMode])
 
@@ -2422,7 +2430,7 @@ function ProjectWorkspace({
     if (!compileTargetSource.trim()) return
     const id = window.setTimeout(() => {
       compileNow(compileTargetSource, compileContextWithActiveSource(activeSource))
-    }, TYPST_AUTO_COMPILE_DEBOUNCE_MS)
+    }, typstAutoCompileDelayRef.current)
     return () => window.clearTimeout(id)
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeSource, canRender, canRenderLatex, compileContextWithActiveSource, compileNow, compileTargetSource, previewMode, shouldUseTinymistWebPreview])
@@ -4884,7 +4892,8 @@ function ProjectWorkspace({
     activeEditorSourceRef.current = source
     lastEditAtRef.current = Date.now()
 
-    // 1. Live real-time Typst WASM compilation (16ms) directly from the source buffer.
+    // 1. Live Typst WASM compilation directly from the source buffer, after a
+    // pause that depends on how long the document takes to compile.
     // While a sub-document of the main file is edited, compile the main file
     // with the edited text in place, so references, numbering and the
     // bibliography defined elsewhere in the document still resolve.
@@ -4897,7 +4906,7 @@ function ProjectWorkspace({
         const entrySource = compileTargetFile.id === activeFile.id ? source : compileTargetSourceRef.current
         if (!entrySource.trim()) return
         compileNow(entrySource, compileContextWithActiveSource(source))
-      }, 16)
+      }, typstAutoCompileDelayRef.current)
     }
 
     // 2. Debounce updating the heavy EditorPage React state (minimap, outline, bibtex, lsp)
@@ -7166,6 +7175,7 @@ function ProjectWorkspace({
                           pageOffset={pageOffset}
                           compileError={visibleCompileError}
                           isCompiling={isCompiling}
+                          compileMs={lastCompileMs}
                           onTextClick={handleSvgTextClick}
                           reveal={previewReveal}
                         />

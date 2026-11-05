@@ -409,11 +409,18 @@ export function useCompile(options: UseCompileOptions = {}) {
   const [latexSyncTexToken, setLatexSyncTexToken] = useState<string | null>(null)
   const [latexSyncTexEntryPath, setLatexSyncTexEntryPath] = useState<string | null>(null)
 
+  const [lastCompileMs, setLastCompileMs] = useState<number | null>(null)
+
   const abortRef = useRef<AbortController | null>(null)
   const compileRunIdRef = useRef(0)
   const latestCompletedKeyRef = useRef<string | null>(null)
   const queuedRequestRef = useRef<{ source: string; context?: CompileContext } | null>(null)
   const isCompileInFlightRef = useRef(false)
+  // A Typst WebAssembly compile cannot be stopped once it runs. Aborting it
+  // for a newer request only threw its result away, so while someone typed
+  // faster than a long document compiles the preview never changed. Such a
+  // compile now finishes and is shown, and the newest request runs next.
+  const isLocalTypstCompileInFlightRef = useRef(false)
   const pdfUrlRef = useRef<string | null>(null)
   const binaryFileCacheRef = useRef<Map<string, Promise<Uint8Array>>>(new Map())
   const latexInitialServerCompileKeysRef = useRef<Set<string>>(new Set())
@@ -434,7 +441,9 @@ export function useCompile(options: UseCompileOptions = {}) {
 
     queuedRequestRef.current = { source, context }
     if (isCompileInFlightRef.current) {
-      abortRef.current?.abort()
+      if (!isLocalTypstCompileInFlightRef.current) {
+        abortRef.current?.abort()
+      }
       return
     }
 
@@ -447,6 +456,7 @@ export function useCompile(options: UseCompileOptions = {}) {
       while (queuedRequestRef.current) {
         const nextRequest = queuedRequestRef.current
         queuedRequestRef.current = null
+        isLocalTypstCompileInFlightRef.current = false
 
         const nextRequestKey = requestKey(nextRequest.source, nextRequest.context)
         if (latestCompletedKeyRef.current === nextRequestKey) {
@@ -480,6 +490,22 @@ export function useCompile(options: UseCompileOptions = {}) {
             }
             const entryPath = nextRequest.context.entryFilePath ?? 'main.typ'
 
+            isLocalTypstCompileInFlightRef.current = true
+            const localCompileStartedAt = performance.now()
+            // The compiler's own compile and render time when it reports one:
+            // the first compile also loads the compiler and its fonts and has
+            // nothing cached (a 150-page report: 5.7 s against 0.4 s after),
+            // which made the live-preview pause far too long afterwards.
+            const recordLocalCompileTime = (timings?: { compileMs: number; renderMs: number; cold?: boolean }) => {
+              if (timings?.cold) {
+                const estimate = Math.max(1, Math.round(timings.compileMs / 4 + timings.renderMs))
+                setLastCompileMs((current) => current ?? estimate)
+                return
+              }
+              setLastCompileMs(Math.max(1, Math.round(
+                timings ? timings.compileMs + timings.renderMs : performance.now() - localCompileStartedAt,
+              )))
+            }
             try {
               if ((nextRequest.context?.format ?? 'svg') === 'pdf') {
                 const pdfResult = await compileTypstWasmToPdf(nextRequest.source, entryPath, files)
@@ -487,6 +513,7 @@ export function useCompile(options: UseCompileOptions = {}) {
                   if (queuedRequestRef.current) continue
                   return
                 }
+                recordLocalCompileTime()
                 latestCompletedKeyRef.current = nextRequestKey
                 setCompileDiagnostics([])
                 setCompileNotice('Compiled locally via Typst WebAssembly.')
@@ -506,6 +533,7 @@ export function useCompile(options: UseCompileOptions = {}) {
                 if (queuedRequestRef.current) continue
                 return
               }
+              recordLocalCompileTime(result.timings)
               latestCompletedKeyRef.current = nextRequestKey
               setCompileDiagnostics([])
               setCompileError(null)
@@ -528,6 +556,7 @@ export function useCompile(options: UseCompileOptions = {}) {
                     if (queuedRequestRef.current) continue
                     return
                   }
+                  recordLocalCompileTime(retryResult.timings)
                   latestCompletedKeyRef.current = nextRequestKey
                   setCompileDiagnostics([])
                   setCompileError(null)
@@ -576,6 +605,8 @@ export function useCompile(options: UseCompileOptions = {}) {
               if (message) {
                 logger.warning('[compile:typst-wasm] fallback to server compiler:', message)
               }
+              // The server compile below can be cancelled by a newer request.
+              isLocalTypstCompileInFlightRef.current = false
               usedServerFallbackFromWasm = true
             }
           }
@@ -905,6 +936,7 @@ export function useCompile(options: UseCompileOptions = {}) {
       if (compileRunIdRef.current === runId) {
         abortRef.current = null
         isCompileInFlightRef.current = false
+        isLocalTypstCompileInFlightRef.current = false
         setIsCompiling(false)
       }
     }
@@ -928,6 +960,7 @@ export function useCompile(options: UseCompileOptions = {}) {
     abortRef.current?.abort()
     queuedRequestRef.current = null
     isCompileInFlightRef.current = false
+    isLocalTypstCompileInFlightRef.current = false
     latestCompletedKeyRef.current = null
     setCompileError(null)
     setCompileDiagnostics([])
@@ -945,7 +978,7 @@ export function useCompile(options: UseCompileOptions = {}) {
     replacePdfUrl(null)
   }, [replacePdfUrl])
 
-  return { pages, pageCount, pageOffset, pdfUrl, webPreviewHtml, isCompiling, compileError, compileDiagnostics, effectivePreviewFormat, compileNotice, compileLog, latexSyncTex, latexSyncTexToken, latexSyncTexEntryPath, compileNow, resetCompile }
+  return { pages, pageCount, pageOffset, pdfUrl, webPreviewHtml, isCompiling, compileError, compileDiagnostics, effectivePreviewFormat, compileNotice, compileLog, latexSyncTex, latexSyncTexToken, latexSyncTexEntryPath, lastCompileMs, compileNow, resetCompile }
 }
 
 function applyActiveFileOverride(
@@ -975,26 +1008,32 @@ async function resolveTypstCompileFiles(
   files: Array<{ id?: string; path: string; content?: string; mimeType?: string; updatedAt?: number }>,
   binaryFileCache: Map<string, Promise<Uint8Array>>,
 ): Promise<Array<{ path: string; content: string | Uint8Array }>> {
-  const resolvedFiles: Array<{ path: string; content: string | Uint8Array }> = []
+  const slots: Array<{ path: string; content: string | Uint8Array } | null> = files.map((file) => (
+    typeof file.content === 'string' ? { path: file.path, content: file.content } : null
+  ))
 
-  for (const file of files) {
-    if (typeof file.content === 'string') {
-      resolvedFiles.push({ path: file.path, content: file.content })
-      continue
+  // Images and fonts are fetched several at a time: one after the other, a
+  // report with a hundred figures waited a round trip per figure before its
+  // first preview.
+  const binaries = files.flatMap((file, index) => (
+    typeof file.content !== 'string' && shouldLoadBinaryCompileFile(file) && projectId && file.id
+      ? [{ index, path: file.path, id: file.id, updatedAt: file.updatedAt }]
+      : []
+  ))
+  let next = 0
+  const fetchNext = async (): Promise<void> => {
+    while (next < binaries.length) {
+      const entry = binaries[next++]
+      const content = await fetchBinaryProjectFile(projectId!, entry.id, entry.updatedAt, binaryFileCache)
+      if (content) slots[entry.index] = { path: entry.path, content }
     }
-
-    if (!shouldLoadBinaryCompileFile(file) || !projectId || !file.id) {
-      continue
-    }
-
-    resolvedFiles.push({
-      path: file.path,
-      content: await fetchBinaryProjectFile(projectId, file.id, file.updatedAt, binaryFileCache),
-    })
   }
+  await Promise.all(Array.from({ length: Math.min(BINARY_FETCH_CONCURRENCY, binaries.length) }, fetchNext))
 
-  return resolvedFiles
+  return slots.filter((slot): slot is { path: string; content: string | Uint8Array } => slot !== null)
 }
+
+const BINARY_FETCH_CONCURRENCY = 8
 
 function shouldLoadBinaryCompileFile(file: { path: string; mimeType?: string }): boolean {
   return /\.(png|jpe?g|pdf|svg|bmp|gif|webp|ttf|otf|ttc|woff|woff2)$/i.test(file.path)
