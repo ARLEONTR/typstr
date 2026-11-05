@@ -751,6 +751,21 @@ export async function initializeDatabase(): Promise<void> {
         UPDATE sharing_presets SET name = left(name, 255) WHERE length(name) > 255;
         UPDATE project_invitations SET email = left(email, 254) WHERE length(email) > 254;
 
+        -- Local file storage ids (absolute paths) left behind by moves and renames
+        -- before they were kept up to date (see syncLocalFileStorageIds).
+        UPDATE project_files f
+        SET drive_file_id = p.drive_folder_id || '/' || f.path
+        FROM projects p
+        WHERE p.id = f.project_id
+          AND p.drive_folder_id LIKE '/%'
+          AND f.drive_file_id LIKE '/%'
+          AND f.path NOT LIKE 'Trash/%'
+          AND f.drive_file_id <> p.drive_folder_id || '/' || f.path
+          AND NOT EXISTS (
+            SELECT 1 FROM project_files other
+            WHERE other.drive_file_id = p.drive_folder_id || '/' || f.path
+          );
+
         -- Length constraints on user-supplied text fields
         DO $$ BEGIN
           ALTER TABLE projects ADD CONSTRAINT projects_title_length CHECK(length(title) <= 255);
@@ -1328,7 +1343,22 @@ export async function updateProjectTitle(projectId: string, title: string): Prom
 }
 
 export async function updateProjectDriveFolderId(projectId: string, driveFolderId: string): Promise<void> {
-  await pool.query('UPDATE projects SET drive_folder_id = $1, updated_at = $2 WHERE id = $3', [driveFolderId, Date.now(), projectId])
+  await withTransaction(async (client) => {
+    const previous = await queryOne<{ drive_folder_id: string }>(client, 'SELECT drive_folder_id FROM projects WHERE id = $1 FOR UPDATE', [projectId])
+    await client.query('UPDATE projects SET drive_folder_id = $1, updated_at = $2 WHERE id = $3', [driveFolderId, Date.now(), projectId])
+    // Renaming a project renames its local folder, which every local storage
+    // id of its files starts with. Left as they were, the next tree sync
+    // deleted every file row of the project, with all comments, suggestions
+    // and revisions, and created them anew.
+    const previousFolder = previous?.drive_folder_id
+    if (previousFolder?.startsWith('/') && driveFolderId.startsWith('/') && previousFolder !== driveFolderId) {
+      await client.query(`
+        UPDATE project_files
+        SET drive_file_id = $1 || substr(drive_file_id, length($2) + 1)
+        WHERE project_id = $3 AND left(drive_file_id, length($2) + 1) = $2 || '/'
+      `, [driveFolderId, previousFolder, projectId])
+    }
+  })
 }
 
 export async function setProjectMainFile(projectId: string, mainFileId: string | null): Promise<void> {
@@ -2134,6 +2164,40 @@ export async function updateProjectFileCollaborationState(fileId: string, state:
   await pool.query('UPDATE project_files SET collaboration_state = $1 WHERE id = $2', [state ? Buffer.from(state) : null, fileId])
 }
 
+/**
+ * With local file storage a file's storage id (drive_file_id) is its absolute
+ * path, and reads, writes and the project tree sync find files by it. Moves
+ * and renames changed only the path, so the id kept naming the old location:
+ * the tree sync then took the file for gone and deleted its row, comments and
+ * all, when the owner next opened the project, and a new file at the old
+ * location would have shared the id. Point the ids of these rows at their
+ * current location again. Google Drive ids never start with "/" and are left
+ * alone, as are trashed rows (their path does not match the disk; restoring
+ * them fixes the id).
+ */
+export async function syncLocalFileStorageIds(fileIds: string[], queryable: Queryable = pool): Promise<void> {
+  if (fileIds.length === 0) {
+    return
+  }
+
+  await queryable.query(`
+    UPDATE project_files f
+    SET drive_file_id = p.drive_folder_id || '/' || f.path
+    FROM projects p
+    WHERE p.id = f.project_id
+      AND f.id = ANY($1::text[])
+      AND p.drive_folder_id LIKE '/%'
+      AND f.drive_file_id LIKE '/%'
+      AND f.path NOT LIKE 'Trash/%'
+      AND f.drive_file_id <> p.drive_folder_id || '/' || f.path
+  `, [fileIds])
+}
+
+/** The tree sync found the file at its path under another (stale) local storage id. */
+export async function updateProjectFileStorageId(fileId: string, driveFileId: string): Promise<void> {
+  await pool.query('UPDATE project_files SET drive_file_id = $1 WHERE id = $2', [driveFileId, fileId])
+}
+
 export async function renameProjectFile(fileId: string, name: string, nextPath: string): Promise<void> {
   const file = await getProjectFileById(fileId)
   if (!file) {
@@ -2142,6 +2206,7 @@ export async function renameProjectFile(fileId: string, name: string, nextPath: 
 
   const now = Date.now()
   await pool.query('UPDATE project_files SET name = $1, path = $2, updated_at = $3 WHERE id = $4', [name, nextPath, now, fileId])
+  await syncLocalFileStorageIds([fileId])
   await touchProject(file.projectId, now)
 }
 
@@ -2183,6 +2248,7 @@ export async function moveProjectFile(fileId: string, input: { name?: string; ne
       await client.query('UPDATE project_files SET path = $1, updated_at = $2 WHERE id = $3', [`${input.nextPath}${suffix}`, now, descendant.id])
     }
 
+    await syncLocalFileStorageIds([fileId, ...descendants.map((descendant) => descendant.id)], client)
     await touchProject(file.projectId, now, client)
   })
 }

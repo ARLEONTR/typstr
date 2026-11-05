@@ -21,6 +21,18 @@ export function invalidateDriveFileCache(fileId: string): void {
   driveFileBufferCache.delete(fileId)
 }
 
+/**
+ * Local storage ids are paths: once something moves away from a path, the
+ * contents cached under it (and under everything below it) must not be served
+ * to whatever is stored there next.
+ */
+function invalidateLocalPathCache(...localPaths: string[]): void {
+  const stale = [...driveFileBufferCache.keys()].filter((key) => localPaths.some((localPath) => key === localPath || key.startsWith(`${localPath}/`)))
+  for (const key of stale) {
+    driveFileBufferCache.delete(key)
+  }
+}
+
 export const DRIVE_FOLDER_MIME_TYPE = 'application/vnd.google-apps.folder'
 export const GOOGLE_DOC_MIME_TYPE = 'application/vnd.google-apps.document'
 const GOOGLE_WORKSPACE_MIME_TYPE_PREFIX = 'application/vnd.google-apps.'
@@ -370,6 +382,7 @@ export async function renameDriveItem(userId: string, fileId: string, name: stri
         if (fileId !== newFolderPath) {
           await rename(fileId, newFolderPath)
           await updateProjectDriveFolderId(project.id, newFolderPath)
+          invalidateLocalPathCache(fileId)
         }
       }
       return
@@ -380,6 +393,7 @@ export async function renameDriveItem(userId: string, fileId: string, name: stri
     await mkdir(path.dirname(targetPath), { recursive: true })
     if (currentPath !== targetPath) {
       await rename(currentPath, targetPath)
+      invalidateLocalPathCache(currentPath, fileId)
     }
     return
   }
@@ -416,6 +430,7 @@ export async function moveDriveItem(input: {
     await mkdir(path.dirname(targetPath), { recursive: true })
     if (sourcePath !== targetPath) {
       await rename(sourcePath, targetPath)
+      invalidateLocalPathCache(sourcePath, input.fileId)
     }
     return
   }

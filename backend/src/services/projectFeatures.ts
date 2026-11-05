@@ -13,6 +13,7 @@ import {
   listProjectFiles,
   listProjectsForUser,
   setProjectMainFile,
+  syncLocalFileStorageIds,
   touchProjectFile,
   updateProjectFileCollaborationState,
 } from '../db.js'
@@ -1264,6 +1265,8 @@ export async function restoreProjectEntry(projectId: string, fileId: string): Pr
       WHERE file_id = $1
     `, [entry.id, now])
   }
+  // Back at their original paths: their local storage ids must name them there.
+  await syncLocalFileStorageIds(entries.map((entry) => entry.id))
 }
 
 export async function permanentlyDeleteProjectEntry(projectId: string, fileId: string): Promise<void> {

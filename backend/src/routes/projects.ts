@@ -1407,7 +1407,13 @@ projectsRouter.get('/:projectId', async (req, res) => {
   const user = getAuthenticatedUser(req)
   const ownedProject = await getProjectById(req.params.projectId)
   if (ownedProject?.ownerUserId === user.id) {
-    await syncDriveProjectTree(ownedProject.id, ownedProject.ownerUserId, ownedProject.driveFolderId)
+    // Picking up files added to the folder outside the app must never keep
+    // the project from opening.
+    try {
+      await syncDriveProjectTree(ownedProject.id, ownedProject.ownerUserId, ownedProject.driveFolderId)
+    } catch (error) {
+      console.warn('[project-sync] folder sync failed:', error instanceof Error ? error.message : String(error))
+    }
   }
 
   const project = await getProjectDetailForUser(req.params.projectId, user.id)
