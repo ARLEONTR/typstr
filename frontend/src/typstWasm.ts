@@ -10,6 +10,7 @@ import { apiClient } from './api/client'
 import { isFatalTypstWasmError } from './typstWasmErrors'
 import { splitTypstSvgIntoPages } from './typstSvgPages'
 import { looksLikeFontFile, typstFontSources } from './typstFontAssets'
+import { explainMissingFiles, isVirtualDirectory } from './typstMissingFiles'
 
 type ProjectFileEntry = { path: string; content: string | Uint8Array }
 type PackageSpec = { namespace: string; name: string; version: string }
@@ -103,7 +104,11 @@ async function createTypstCompiler(): Promise<TypstCompiler> {
     (path: string) => {
       const norm = normalizeVirtualPath(path)
       const rel = norm.replace(/^\/+/, '')
-      return virtualFiles.has(norm) || virtualFiles.has(rel)
+      const found = virtualFiles.has(norm) || virtualFiles.has(rel)
+      if (!found && !isVirtualDirectory(virtualFiles, rel)) {
+        missingWorkspacePaths.add(rel)
+      }
+      return found
     },
     (path: string) => normalizeVirtualPath(path),
     (path: string) => {
@@ -191,12 +196,17 @@ export function warmTypstWasmInBackground(): void {
 }
 
 
+// Paths the document asked for that are not in the project (see
+// typstMissingFiles.ts), collected per compile.
+const missingWorkspacePaths = new Set<string>()
+
 export async function compileTypstWasm(
   source: string,
   entryFilePath: string,
   files: ProjectFileEntry[],
 ): Promise<TypstWasmSvgResult> {
   return runExclusive(async () => {
+    missingWorkspacePaths.clear()
     try {
       const compiler = await getTypstCompiler()
       const packageBundleCache = compiler._packageBundleCache || new Map<string, Promise<PackageBundleResponse>>()
@@ -234,7 +244,7 @@ export async function compileTypstWasm(
       if (isFatalTypstWasmError(error)) {
         resetTypstWasmState()
       }
-      throw error
+      throw explainMissingFiles(error, missingWorkspacePaths)
     }
   })
 }
@@ -245,6 +255,7 @@ export async function compileTypstWasmToPdf(
   files: ProjectFileEntry[],
 ): Promise<TypstWasmPdfResult> {
   return runExclusive(async () => {
+    missingWorkspacePaths.clear()
     try {
       const compiler = await getTypstCompiler()
       const packageBundleCache = compiler._packageBundleCache || new Map<string, Promise<PackageBundleResponse>>()
@@ -268,7 +279,7 @@ export async function compileTypstWasmToPdf(
       if (isFatalTypstWasmError(error)) {
         resetTypstWasmState()
       }
-      throw error
+      throw explainMissingFiles(error, missingWorkspacePaths)
     }
   })
 }
