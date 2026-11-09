@@ -49,7 +49,7 @@ import { compileTypstProjectPdf, convertTypstProjectToDocx, convertWithPandoc, i
 import { ecosystemIssuesToCompileDiagnostics, validateProjectWorkspace } from './ecosystem.js'
 import { loadProjectWorkspace } from './projectWorkspace.js'
 import { pingSessionRedis } from '../auth.js'
-import { jobQueue, jobQueueEvents, createWorker, cleanFinishedJobs } from './queueManager.js'
+import { jobQueue, jobQueueEvents, createWorker, cleanFinishedJobs, packResultForQueue, unpackResultFromQueue } from './queueManager.js'
 import { assertCanStoreFileBytes, consumeCompileQuota } from './billing.js'
 import { withKeyedLock } from './keyedLock.js'
 import { purgeExpiredTrash, replaceProjectFileText } from './projectFeatures.js'
@@ -220,7 +220,7 @@ export function startBackgroundJobWorker(): void {
   }
 
   worker = createWorker(async (job) => {
-    return await executeJob(job.name as BackgroundJobType, job.data)
+    return await packResultForQueue(await executeJob(job.name as BackgroundJobType, job.data))
   }, 10)
   void cleanFinishedJobs()
 }
@@ -260,7 +260,8 @@ export async function runBackgroundJobAndWait<TResult>(
     attempts: options.maxAttempts ?? 3,
   })
   await jobQueueEvents.waitUntilReady()
-  return await job.waitUntilFinished(jobQueueEvents, options.timeoutMs ?? 60_000)
+  const returnValue = await job.waitUntilFinished(jobQueueEvents, options.timeoutMs ?? 60_000)
+  return await unpackResultFromQueue<TResult>(returnValue)
 }
 
 export function runCoalescedCompileJobAndWait(
