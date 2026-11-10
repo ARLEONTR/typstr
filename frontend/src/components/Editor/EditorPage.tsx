@@ -999,7 +999,7 @@ function ProjectWorkspace({
         activeFileId: compileTargetFile.id === activeFile.id ? undefined : activeFile.id,
         activeFilePath: compileTargetFile.id === activeFile.id ? undefined : activeFile.path,
         activeSource: compileTargetFile.id === activeFile.id ? undefined : currentActiveFileSource,
-        files: project.files.map((file) => ({
+        files: project.files.filter(isStoredProjectFile).map((file) => ({
           id: file.id,
           path: file.path,
           mimeType: file.mimeType,
@@ -1693,7 +1693,7 @@ function ProjectWorkspace({
       return
     }
 
-    const searchableFiles = project.files.filter(isEditableTextFile)
+    const searchableFiles = project.files.filter((file) => isStoredProjectFile(file) && isEditableTextFile(file))
     const missingFiles = searchableFiles.filter((file) => projectSearchIndex[file.id] === undefined && file.id !== activeFile.id)
 
     if (missingFiles.length === 0) {
@@ -2237,7 +2237,7 @@ function ProjectWorkspace({
     activeFileId: compileTargetFile.id === activeFile.id ? undefined : activeFile.id,
     activeFilePath: compileTargetFile.id === activeFile.id ? undefined : activeFile.path,
     activeSource: compileTargetFile.id === activeFile.id ? undefined : activeSourceOverride,
-    files: project.files.map((f) => ({
+    files: project.files.filter(isStoredProjectFile).map((f) => ({
       id: f.id,
       path: f.path,
       mimeType: f.mimeType,
@@ -2623,7 +2623,7 @@ function ProjectWorkspace({
   // Preview <-> editor sync needs the text of every Typst file the document
   // includes, not only the open ones.
   const typstSyncFileIds = useMemo(
-    () => project.files.filter((file) => isRenderableTypstFile(file)).map((file) => file.id).join(','),
+    () => project.files.filter((file) => isStoredProjectFile(file) && isRenderableTypstFile(file)).map((file) => file.id).join(','),
     [project.files],
   )
   useEffect(() => {
@@ -3859,7 +3859,7 @@ function ProjectWorkspace({
   // the right place.
   const previewIndex = useMemo(() => buildPreviewIndex(pages), [pages])
   const typstSyncSources = useCallback((): SourceFile[] => project.files
-    .filter((file) => isRenderableTypstFile(file))
+    .filter((file) => isStoredProjectFile(file) && isRenderableTypstFile(file))
     .map((file) => ({
       id: file.id,
       path: file.path,
@@ -4013,7 +4013,7 @@ function ProjectWorkspace({
 
   const loadProjectFilesForAi = useCallback(async (): Promise<AiCollaborationProjectFile[]> => {
     const currentSearchIndex = projectSearchIndexRef.current
-    const textFiles = project.files.filter(isAiCollaborationTextFile)
+    const textFiles = project.files.filter((file) => isStoredProjectFile(file) && isAiCollaborationTextFile(file))
     const missingFiles = textFiles.filter((file) => file.id !== activeFile.id && currentSearchIndex[file.id] === undefined)
     const loadedEntries = missingFiles.length > 0
       ? await Promise.all(missingFiles.map(async (file) => {
@@ -11689,9 +11689,20 @@ function collectOptimisticallyRemovedFiles(files: ProjectFile[], target: Project
   return files.filter((file) => file.id === target.id || file.path.startsWith(`${target.path}/`))
 }
 
+const OPTIMISTIC_UPLOAD_ID_PREFIX = 'optimistic-upload:'
+
+/**
+ * False for the placeholder of a file that is still uploading: the server has no content for it yet.
+ * Code that fetches file contents must skip placeholders. A folder drop adds one per file, and a burst
+ * of 404s for them gets the user's IP banned by the CrowdSec http-probing scenario.
+ */
+function isStoredProjectFile(file: ProjectFile): boolean {
+  return !file.id.startsWith(OPTIMISTIC_UPLOAD_ID_PREFIX)
+}
+
 function createOptimisticUploadedFile(file: File, parentPath: string | null, index: number): ProjectFile {
   return {
-    id: `optimistic-upload:${file.name}:${file.lastModified}:${index}`,
+    id: `${OPTIMISTIC_UPLOAD_ID_PREFIX}${file.name}:${file.lastModified}:${index}`,
     projectId: '',
     name: file.name,
     path: joinProjectPath(parentPath, file.name),
