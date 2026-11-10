@@ -461,6 +461,11 @@ export default function DocumentList() {
       setInvitations(invRes.data)
       setTeams(teamsRes.data)
     } catch (error) {
+      // the session ended (for example logged out in another tab): go to the login page
+      if (Number((error as any)?.response?.status ?? 0) === 401) {
+        window.location.href = '/'
+        return
+      }
       console.error('Failed to load dashboard:', error)
       setDashboardError('Failed to load your projects. Please try again.')
     } finally {

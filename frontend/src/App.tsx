@@ -41,6 +41,15 @@ import { HoverTooltips } from './components/Global/HoverTooltips'
 import type { BillingStatus, CommentSelectionAnchor, CompileDiagnostic, ProjectComment, ProjectRevision, TypstPreviewSessionResponse } from './types'
 
 const INACTIVITY_TIMEOUT_MS = 30 * 60 * 1_000
+// All tabs share one session, so the inactivity logout must look at the activity of every tab:
+// otherwise an idle background tab logs out a user who is working in another tab.
+const LAST_ACTIVITY_STORAGE_KEY = 'typstr:last-activity'
+const ACTIVITY_SHARE_INTERVAL_MS = 15_000
+
+function readSharedActivity(): number {
+  const value = Number(safeStorage.getItem(LAST_ACTIVITY_STORAGE_KEY))
+  return Number.isFinite(value) ? value : 0
+}
 
 const EditorPage = lazy(() => import('./components/Editor/EditorPage'))
 const AdminPage = lazy(() => import('./components/Admin/AdminPage'))
@@ -1452,12 +1461,22 @@ function AppRoutes() {
   useEffect(() => {
     if (!user) return
 
-    const touch = () => { lastActivityRef.current = Date.now() }
+    let lastShared = 0
+    const touch = () => {
+      const now = Date.now()
+      lastActivityRef.current = now
+      if (now - lastShared >= ACTIVITY_SHARE_INTERVAL_MS) {
+        lastShared = now
+        safeStorage.setItem(LAST_ACTIVITY_STORAGE_KEY, String(now))
+      }
+    }
+    touch()
     const events = ['mousemove', 'keydown', 'click', 'scroll', 'touchstart'] as const
     for (const event of events) window.addEventListener(event, touch, { passive: true })
 
     const timer = setInterval(() => {
-      if (Date.now() - lastActivityRef.current >= INACTIVITY_TIMEOUT_MS) {
+      const lastActivity = Math.max(lastActivityRef.current, readSharedActivity())
+      if (Date.now() - lastActivity >= INACTIVITY_TIMEOUT_MS) {
         void logout()
       }
     }, 60_000)
