@@ -299,7 +299,7 @@ export const EDITOR_FONT_OPTIONS = [
 ]
 
 export const DEFAULT_THEME: WorkspaceTheme = {
-  presetId: 'midnight',
+  presetId: 'paper',
   uiFontFamily: UI_FONT_OPTIONS[0].value,
   uiFontSize: 11,
   editorFontFamily: EDITOR_FONT_OPTIONS[0].value,
@@ -326,4 +326,10 @@ export function normalizeWorkspaceTheme(input: unknown): WorkspaceTheme {
       ? parsed.editorFontSize
       : DEFAULT_THEME.editorFontSize,
   }
+}
+
+export function themePresetById(presetId: string): ThemePreset {
+  return THEME_PRESETS.find((preset) => preset.id === presetId)
+    ?? THEME_PRESETS.find((preset) => preset.id === DEFAULT_THEME.presetId)
+    ?? THEME_PRESETS[0]
 }

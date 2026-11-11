@@ -87,11 +87,11 @@ import {
   Database,
 } from '../../icons'
 import {
-  THEME_PRESETS,
   DEFAULT_THEME,
   THEME_STORAGE_KEY,
   normalizeWorkspaceTheme,
   resolveThemeVars,
+  themePresetById,
   themeStorageKeyForUser,
   type WorkspaceTheme
 } from '../../theme'
@@ -1773,10 +1773,7 @@ function ProjectWorkspace({
     setGoToColumnValue('1')
   }, [activeFile.id])
 
-  const themePreset = useMemo(
-    () => THEME_PRESETS.find((preset) => preset.id === theme.presetId) ?? THEME_PRESETS[0],
-    [theme.presetId],
-  )
+  const themePreset = useMemo(() => themePresetById(theme.presetId), [theme.presetId])
 
   const workspaceStyle = useMemo<CSSProperties>(
     () => ({

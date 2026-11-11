@@ -100,8 +100,11 @@
 
 /* ── Single page card ───────────────────────────────────────────────── */
 
+/* Pages are paper in every theme: typst.ts draws no background for the
+   default page fill, so a themed background showed through and dark themes
+   put black text on a dark page. A document's own page fill still covers it. */
 .page {
-  background: var(--editor-bg);
+  background: #ffffff;
   box-shadow: var(--surface-shadow);
   border-radius: 2px;
   width: 100%;

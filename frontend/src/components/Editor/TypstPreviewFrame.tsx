@@ -195,7 +195,8 @@ export default function TypstPreviewFrame({ src, entryAbsPath, onSessionLost, on
           minHeight: 0,
           border: '0',
           display: 'block',
-          background: 'var(--editor-bg)',
+          // paper in every theme, see SvgPreview.module.css .page
+          background: '#ffffff',
           visibility: isFrameLoaded ? 'visible' : 'hidden',
         }}
       />

@@ -125,7 +125,8 @@
   margin: 0;
   border-radius: 0;
   overflow: hidden;
-  background: var(--editor-bg);
+  /* paper in every theme, see SvgPreview.module.css .page */
+  background: #ffffff;
   box-shadow: var(--surface-shadow-soft);
 }
 

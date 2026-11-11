@@ -35,7 +35,7 @@ import {
   Brain,
   GraduationCap,
 } from './icons'
-import { THEME_STORAGE_KEY, THEME_PRESETS, DEFAULT_THEME, normalizeWorkspaceTheme, resolveThemeVars, themeStorageKeyForUser } from './theme'
+import { THEME_STORAGE_KEY, DEFAULT_THEME, normalizeWorkspaceTheme, resolveThemeVars, themePresetById, themeStorageKeyForUser } from './theme'
 import { safeStorage } from './safeStorage'
 import { HoverTooltips } from './components/Global/HoverTooltips'
 import type { BillingStatus, CommentSelectionAnchor, CompileDiagnostic, ProjectComment, ProjectRevision, TypstPreviewSessionResponse } from './types'
@@ -72,7 +72,7 @@ function ThemeManager({ children }: { children: React.ReactNode }) {
         safeStorage.removeItem(userScopedKey)
         themeConfig = normalizeWorkspaceTheme(user?.selectedTheme ?? DEFAULT_THEME)
       }
-      const preset = THEME_PRESETS.find(p => p.id === themeConfig.presetId) || THEME_PRESETS[0]
+      const preset = themePresetById(themeConfig.presetId)
       const themeVars = resolveThemeVars(preset.vars)
       const uiFontSize = themeConfig.uiFontSize
       logger.debug('Theme preset:', preset.id)
