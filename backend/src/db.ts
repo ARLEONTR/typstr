@@ -1274,12 +1274,14 @@ export async function getProjectDetailForUser(projectId: string, userId: string)
   }
 
   const role = await getProjectRole(projectId, userId)
+  // Whoever may invite and revoke (owner, manager, editor) sees the invitations: an editor
+  // who invited someone must find the pending invitation again after a reload.
   const [files, state, fileWorkflows, members, invitations] = await Promise.all([
     listProjectFiles(projectId),
     getProjectState(projectId),
     listProjectFileWorkflows(projectId),
     listProjectMembers(projectId),
-    role === 'owner' ? listProjectInvitations(projectId) : Promise.resolve([]),
+    role === 'owner' || role === 'manager' || role === 'editor' ? listProjectInvitations(projectId) : Promise.resolve([]),
   ])
   const workflowMap = new Map(fileWorkflows.map((workflow) => [workflow.fileId, workflow] as const))
 
