@@ -445,13 +445,14 @@ export default function DocumentList() {
 
       const dashData = dashRes.data
       if (cursor) {
+        // Only the active projects are paged; every answer carries the full archived and
+        // trashed lists. A project already shown is never added a second time.
         setDashboard(prev => {
           if (!prev) return dashData
+          const shownIds = new Set(prev.activeProjects.map((project) => project.id))
           return {
             ...dashData,
-            activeProjects: [...prev.activeProjects, ...dashData.activeProjects],
-            trashedProjects: [...prev.trashedProjects, ...dashData.trashedProjects],
-            archivedProjects: [...prev.archivedProjects, ...dashData.archivedProjects],
+            activeProjects: [...prev.activeProjects, ...dashData.activeProjects.filter((project) => !shownIds.has(project.id))],
           }
         })
       } else {

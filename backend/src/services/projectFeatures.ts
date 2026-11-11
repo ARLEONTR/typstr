@@ -46,6 +46,7 @@ import type {
   ProjectTemplate,
   ProjectTemplateId,
 } from '../types.js'
+import { compareDashboardProjects, paginateDashboardProjects } from './dashboardPagination.js'
 
 const DRIVE_FOLDER_MIME_TYPE = 'application/vnd.google-apps.folder'
 const TRASH_PATH_PREFIX = 'Trash'
@@ -597,7 +598,6 @@ export async function listProjectTemplates(userId?: string): Promise<ProjectTemp
 
 export async function listDashboardProjects(userId: string, options?: { cursor?: string; limit?: number }): Promise<ProjectDashboardData> {
   const limit = Math.min(Math.max(1, options?.limit ?? 50), 100)
-  const cursor = options?.cursor ? Number(options.cursor) : null
 
   const projects = await listProjectsForUser(userId)
   const states = await getProjectStates(projects.map((project) => project.id))
@@ -611,21 +611,7 @@ export async function listDashboardProjects(userId: string, options?: { cursor?:
     .filter((project) => !project.state.archivedAt && !project.state.trashedAt)
     .sort(compareDashboardProjects)
 
-  let paginatedActive = allActive
-  if (cursor !== null) {
-    const idx = allActive.findIndex((p) => {
-      const recent = p.state.lastOpenedAt ?? p.updatedAt
-      return recent < cursor || (recent === cursor && p.id <= (options?.cursor ?? ''))
-    })
-    paginatedActive = idx >= 0 ? allActive.slice(idx) : []
-  }
-
-  const page = paginatedActive.slice(0, limit)
-  const hasMore = paginatedActive.length > limit
-  const lastItem = page[page.length - 1]
-  const nextCursor = hasMore && lastItem
-    ? String(lastItem.state.lastOpenedAt ?? lastItem.updatedAt)
-    : null
+  const { page, nextCursor } = paginateDashboardProjects(allActive, options?.cursor, limit)
 
   return {
     activeProjects: page,
@@ -1738,17 +1724,6 @@ async function allocateDuplicateName(files: ProjectFile[], parentPath: string | 
   throw new Error('Could not allocate a duplicate name')
 }
 
-function compareDashboardProjects(left: ProjectSummary & { state: ProjectState }, right: ProjectSummary & { state: ProjectState }): number {
-  if (left.state.isPinned !== right.state.isPinned) {
-    return left.state.isPinned ? -1 : 1
-  }
-  if (left.state.isStarred !== right.state.isStarred) {
-    return left.state.isStarred ? -1 : 1
-  }
-  const leftRecent = left.state.lastOpenedAt ?? left.updatedAt
-  const rightRecent = right.state.lastOpenedAt ?? right.updatedAt
-  return rightRecent - leftRecent
-}
 
 function parentDirectoryPath(filePath: string): string | null {
   const parent = path.posix.dirname(filePath)
